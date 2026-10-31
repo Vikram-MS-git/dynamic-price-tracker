@@ -1,36 +1,22 @@
 import { useState } from 'react';
+import Icon from './Icon';
 
 export default function HowToRealProducts() {
   const [open, setOpen] = useState(false);
-
   return (
     <div className="card help-card">
-      <button
-        type="button"
-        className="help-toggle"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        {open ? '▼' : '▶'} How to track & compare real products
+      <button type="button" className="help-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <Icon name="info" size={16} />
+        How to track and compare the same product on both stores
+        <Icon name={open ? 'arrowUp' : 'arrowDown'} size={14} className="help-caret" />
       </button>
       {open && (
         <ol className="help-steps">
-          <li>
-            Open the <strong>same item</strong> on Amazon.in and Flipkart (product page, not search).
-          </li>
-          <li>
-            Add it <strong>twice</strong> in the form below — once per platform.
-          </li>
-          <li>
-            Use the <strong>same Group name</strong> for both (e.g. <code>boAt Rockerz 450</code>).
-          </li>
-          <li>
-            Click <strong>Refresh all prices</strong>. If scrape fails, sites may block bots — demo seed
-            data still works for charts.
-          </li>
-          <li>
-            Open <strong>Compare (RQ1)</strong> in the menu and pick your group.
-          </li>
+          <li>Open the <strong>same item</strong> on Amazon.in and Flipkart (a product page, not search results).</li>
+          <li>Use <strong>Track New Product</strong> twice, once per store.</li>
+          <li>Give both the <strong>same group name</strong>, for example <code>boAt Rockerz 450</code>.</li>
+          <li>Press <strong>Refresh all prices</strong>. If a store blocks the fetch, that product shows a failed-refresh notice.</li>
+          <li>Open <strong>Compare</strong> and pick the group.</li>
         </ol>
       )}
     </div>

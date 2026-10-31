@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useChartColors } from '../lib/chartColors';
+import { EmptyState } from './States';
 import {
   LineChart,
   Line,
@@ -10,11 +12,6 @@ import {
   ResponsiveContainer,
   Brush,
 } from 'recharts';
-
-const PLATFORM_COLORS = {
-  amazon: '#ff9900',
-  flipkart: '#2874f0',
-};
 
 function formatDate(iso) {
   return new Date(iso).toLocaleString('en-IN', {
@@ -58,6 +55,9 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function CompareChart({ series, visiblePlatforms }) {
+  const colors = useChartColors();
+  const PLATFORM_COLORS = { amazon: colors.amazon, flipkart: colors.flipkart };
+  const axis = { tick: { fontSize: 11, fill: colors.axis }, tickLine: false, axisLine: false };
   const allPlatforms = useMemo(
     () => [...new Set(series?.map((s) => s.platform) ?? [])],
     [series]
@@ -66,7 +66,11 @@ export default function CompareChart({ series, visiblePlatforms }) {
 
   const hasData = series?.some((s) => s.points?.length > 0);
   if (!hasData) {
-    return <p>No price history for this group. Run seed:demo or refresh prices.</p>;
+    return (
+      <EmptyState icon="chart" title="No price history for this group">
+        Refresh prices on the dashboard, or widen the date range.
+      </EmptyState>
+    );
   }
 
   const data = buildChartData(series);
@@ -84,23 +88,23 @@ export default function CompareChart({ series, visiblePlatforms }) {
             key={platform}
             type="button"
             className={`platform-chip ${hidden[platform] ? 'off' : 'on'}`}
-            style={{ '--chip-color': PLATFORM_COLORS[platform] || '#2563eb' }}
+            style={{ '--chip-color': PLATFORM_COLORS[platform] || colors.accent }}
             onClick={() => togglePlatform(platform)}
           >
             {platform}
           </button>
         ))}
-        <span className="muted">Click to show/hide lines · drag brush below chart to zoom</span>
+        <span className="muted">Click a store to show or hide it. Drag the handles under the chart to zoom.</span>
       </div>
       <div className="chart-wrap chart-wrap-tall">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${v}`} />
+            <CartesianGrid stroke={colors.grid} vertical={false} />
+            <XAxis dataKey="time" interval="preserveStartEnd" minTickGap={32} {...axis} />
+            <YAxis width={64} tickFormatter={(v) => `₹${Number(v).toLocaleString('en-IN')}`} {...axis} />
             <Tooltip content={<CustomTooltip />} />
             <Legend />
-            <Brush dataKey="time" height={28} stroke="#2563eb" />
+            <Brush dataKey="time" height={28} stroke={colors.accent} fill="transparent" />
             {platforms.map((platform) =>
               hidden[platform] ? null : (
                 <Line
@@ -108,9 +112,9 @@ export default function CompareChart({ series, visiblePlatforms }) {
                   type="monotone"
                   dataKey={platform}
                   name={platform}
-                  stroke={PLATFORM_COLORS[platform] || '#2563eb'}
+                  stroke={PLATFORM_COLORS[platform] || colors.accent}
                   strokeWidth={2}
-                  dot={{ r: 2 }}
+                  dot={data.length < 25 ? { r: 2.5 } : false}
                   activeDot={{ r: 5 }}
                   connectNulls
                 />

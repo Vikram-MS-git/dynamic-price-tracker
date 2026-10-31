@@ -1,260 +1,237 @@
-
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { useToast } from '../context/ToastContext';
+import { useApp } from '../context/AppContext';
+import { formatINR, formatPct, timeAgo } from '../lib/format';
+import Icon from './Icon';
+import Modal from './Modal';
+import PlatformBadge from './PlatformBadge';
 import ProductImage from './ProductImage';
+import Sparkline from './Sparkline';
+import { EmptyState, Skeleton } from './States';
 
-function formatWhen(iso) {
-  if (!iso) return 'Never';
-
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return 'Unknown';
-
-  return date.toLocaleString('en-IN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+function Change({ stats }) {
+  if (!stats || stats.change == null) return <span className="muted">—</span>;
+  const dir = stats.change < 0 ? 'down' : stats.change > 0 ? 'up' : 'flat';
+  return (
+    <span className={`change change-${dir}`}>
+      {dir !== 'flat' && <Icon name={dir === 'down' ? 'arrowDown' : 'arrowUp'} size={13} strokeWidth={2.2} />}
+      {formatPct(stats.pctChange)}
+    </span>
+  );
 }
 
-export default function ProductList({ products, loading, onChanged }) {
-  const [deletingId, setDeletingId] = useState(null);
-  const [search, setSearch] = useState('');
-  const [platform, setPlatform] = useState('all');
-  const [sortBy, setSortBy] = useState('default');
+function sparkTone(stats) {
+  if (!stats || stats.change == null || stats.change === 0) return 'neutral';
+  return stats.change < 0 ? 'good' : 'bad';
+}
 
-  const filteredProducts = useMemo(() => {
-    const query = search.trim().toLowerCase();
+export default function ProductList({ products, totalCount, loading, insights, insightsLoading, hasFilters, onClearFilters, onChanged }) {
+  const toast = useToast();
+  const { alerts, openTrack } = useApp();
+  const [refreshingId, setRefreshingId] = useState(null);
+  const [toDelete, setToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
-    const result = (products || []).filter((product) => {
-      const matchesSearch =
-        !query ||
-        [product.name, product.category, product.platform]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(query));
-
-      const matchesPlatform =
-        platform === 'all' ||
-        String(product.platform || '').toLowerCase() === platform;
-
-      return matchesSearch && matchesPlatform;
-    });
-
-    result.sort((a, b) => {
-      const priceA =
-        a.latest_price == null ? null : Number(a.latest_price);
-      const priceB =
-        b.latest_price == null ? null : Number(b.latest_price);
-
-      switch (sortBy) {
-        case 'price-low':
-          if (priceA == null) return 1;
-          if (priceB == null) return -1;
-          return priceA - priceB;
-
-        case 'price-high':
-          if (priceA == null) return 1;
-          if (priceB == null) return -1;
-          return priceB - priceA;
-
-        case 'name':
-          return String(a.name || '').localeCompare(String(b.name || ''));
-
-        default:
-          return 0;
-      }
-    });
-
-    return result;
-  }, [products, search, platform, sortBy]);
-
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete "${name}" and all its price history?`)) {
-      return;
-    }
-
-    setDeletingId(id);
-
+  const handleRefresh = async (p) => {
+    setRefreshingId(p.id);
     try {
-      await api.deleteProduct(id);
+      const r = await api.scrapeProduct(p.id);
+      if (r.success) toast.success(`${p.name} is now ${formatINR(r.price)}.`, 'Price updated');
+      else toast.error(r.error || 'The store did not return a price.', `Could not refresh ${p.name}`);
       onChanged?.();
     } catch (err) {
-      window.alert(err.message || 'Unable to delete product.');
+      toast.error(err.message || 'Unable to refresh this product.');
     } finally {
-      setDeletingId(null);
+      setRefreshingId(null);
     }
   };
 
+  const confirmDelete = async () => {
+    if (!toDelete) return;
+    setDeleting(true);
+    try {
+      await api.deleteProduct(toDelete.id);
+      toast.success(`${toDelete.name} and its price history were removed.`, 'Product deleted');
+      setToDelete(null);
+      onChanged?.();
+    } catch (err) {
+      toast.error(err.message || 'Unable to delete product.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const actions = (p) => (
+    <div className="row-actions">
+      <Link to={`/products/${p.id}`} className="icon-btn" title="View price history" aria-label={`View price history for ${p.name}`}>
+        <Icon name="chart" size={16} />
+      </Link>
+      {p.group_id && (
+        <Link to={`/compare?group=${p.group_id}`} className="icon-btn" title="Compare stores" aria-label={`Compare stores for ${p.name}`}>
+          <Icon name="compare" size={16} />
+        </Link>
+      )}
+      <button type="button" className="icon-btn" title="Refresh price" aria-label={`Refresh price for ${p.name}`} disabled={refreshingId === p.id} onClick={() => handleRefresh(p)}>
+        <Icon name="refresh" size={16} className={refreshingId === p.id ? 'spin' : ''} />
+      </button>
+      <a href={p.url} target="_blank" rel="noreferrer" className="icon-btn" title="Open on store" aria-label={`Open ${p.name} on the store`}>
+        <Icon name="external" size={16} />
+      </a>
+      <button type="button" className="icon-btn danger" title="Delete product" aria-label={`Delete ${p.name}`} onClick={() => setToDelete(p)}>
+        <Icon name="trash" size={16} />
+      </button>
+    </div>
+  );
+
+  const nameCell = (p) => (
+    <div className="product-cell">
+      <ProductImage src={p.image_url} alt={p.name} platform={p.platform} size="sm" />
+      <div className="product-cell-text">
+        <Link to={`/products/${p.id}`} className="product-name">{p.name}</Link>
+        <span className="muted">
+          {p.category || 'Uncategorised'}
+          {alerts[p.id] && p.latest_price != null && Number(p.latest_price) <= alerts[p.id].target && (
+            <span className="pill pill-good inline-pill">Target reached</span>
+          )}
+        </span>
+        {p.last_scrape_error && (
+          <span className="scrape-hint" title={p.last_scrape_error}>
+            <Icon name="alert" size={13} /> Last refresh failed
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
-      <div className="product-grid">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="product-card skeleton" />
+      <div className="table-skeleton" aria-busy="true" aria-label="Loading products">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="skeleton-row">
+            <Skeleton style={{ width: 40, height: 40, borderRadius: 10 }} />
+            <div style={{ flex: 1 }}>
+              <Skeleton style={{ height: 14, width: '40%' }} />
+              <Skeleton style={{ height: 11, width: '22%', marginTop: 8 }} />
+            </div>
+            <Skeleton style={{ height: 14, width: 80 }} />
+          </div>
         ))}
       </div>
     );
   }
 
-  if (!products?.length) {
+  if (!totalCount) {
     return (
-      <div className="empty-state">
-        <span className="empty-icon">📊</span>
-        <p>No products yet. Add one above to start tracking prices.</p>
-      </div>
+      <EmptyState
+        icon="package"
+        title="No products tracked yet"
+        action={
+          <button type="button" className="btn btn-primary btn-sm" onClick={openTrack}>
+            <Icon name="plus" size={15} strokeWidth={2.2} /> Track your first product
+          </button>
+        }
+      >
+        Add an Amazon.in or Flipkart link and prices will be recorded over time.
+      </EmptyState>
+    );
+  }
+
+  if (!products.length) {
+    return (
+      <EmptyState
+        icon="search"
+        title="No matching products"
+        action={
+          hasFilters && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={onClearFilters}>
+              Clear search and filters
+            </button>
+          )
+        }
+      >
+        Nothing matches your current search or store filter.
+      </EmptyState>
     );
   }
 
   return (
-    <section className="product-list-section">
-      <div className="product-toolbar">
-        <div className="product-search">
-          <label htmlFor="product-search">Search products</label>
-          <input
-            id="product-search"
-            type="search"
-            placeholder="Search by name or category..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
-
-        <div className="product-filter">
-          <label htmlFor="platform-filter">Platform</label>
-          <select
-            id="platform-filter"
-            value={platform}
-            onChange={(event) => setPlatform(event.target.value)}
-          >
-            <option value="all">All platforms</option>
-            <option value="amazon">Amazon</option>
-            <option value="flipkart">Flipkart</option>
-          </select>
-        </div>
-
-        <div className="product-sort">
-          <label htmlFor="product-sort">Sort by</label>
-          <select
-            id="product-sort"
-            value={sortBy}
-            onChange={(event) => setSortBy(event.target.value)}
-          >
-            <option value="default">Default order</option>
-            <option value="price-low">Price: Low to high</option>
-            <option value="price-high">Price: High to low</option>
-            <option value="name">Product name: A–Z</option>
-          </select>
-        </div>
-
-        <button
-          type="button"
-          className="btn-ghost"
-          onClick={() => {
-            setSearch('');
-            setPlatform('all');
-            setSortBy('default');
-          }}
-        >
-          Reset
-        </button>
+    <>
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Store</th>
+              <th className="num">Price</th>
+              <th className="num">Change</th>
+              <th>Trend</th>
+              <th>Updated</th>
+              <th className="actions-col"><span className="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((p) => {
+              const s = insights[p.id];
+              return (
+                <tr key={p.id}>
+                  <td>{nameCell(p)}</td>
+                  <td><PlatformBadge platform={p.platform} /></td>
+                  <td className="num price">{p.latest_price != null ? formatINR(p.latest_price) : <span className="muted">Pending</span>}</td>
+                  <td className="num">{insightsLoading && !s ? <Skeleton style={{ height: 14, width: 48, marginLeft: 'auto' }} /> : <Change stats={s} />}</td>
+                  <td>{insightsLoading && !s ? <Skeleton style={{ height: 22, width: 90 }} /> : <Sparkline values={s?.series} tone={sparkTone(s)} />}</td>
+                  <td className="muted nowrap">{timeAgo(p.last_scraped_at)}</td>
+                  <td className="actions-col">{actions(p)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
-      <p className="product-result-count" aria-live="polite">
-        Showing <strong>{filteredProducts.length}</strong> of{' '}
-        <strong>{products.length}</strong> products
-      </p>
-
-      {filteredProducts.length === 0 ? (
-        <div className="empty-state">
-          <span className="empty-icon">🔎</span>
-          <p>No products match your search or selected platform.</p>
-          <button
-            type="button"
-            className="btn-ghost primary"
-            onClick={() => {
-              setSearch('');
-              setPlatform('all');
-              setSortBy('default');
-            }}
-          >
-            Clear filters
-          </button>
-        </div>
-      ) : (
-        <div className="product-grid">
-          {filteredProducts.map((p) => (
-            <article key={p.id} className="product-card">
-              <ProductImage
-                src={p.image_url}
-                alt={p.name}
-                platform={p.platform}
-                size="lg"
-              />
-
-              <div className="product-card-body">
-                <h3 className="product-title">{p.name}</h3>
-
-                {p.category && (
-                  <p className="product-category">{p.category}</p>
-                )}
-
-                <div className="meta">
-                  <span
-                    className={`badge badge-${String(
-                      p.platform || ''
-                    ).toLowerCase()}`}
-                  >
-                    {p.platform}
-                  </span>
-
-                  {p.latest_price != null && (
-                    <span className="price-tag">
-                      ₹{Number(p.latest_price).toLocaleString('en-IN')}
-                    </span>
-                  )}
+      <ul className="card-list">
+        {products.map((p) => {
+          const s = insights[p.id];
+          return (
+            <li key={p.id} className="mcard">
+              {nameCell(p)}
+              <div className="mcard-stats">
+                <div>
+                  <span className="muted">Price</span>
+                  <strong className="price">{p.latest_price != null ? formatINR(p.latest_price) : 'Pending'}</strong>
                 </div>
-
-                <p className="muted product-updated">
-                  Updated {formatWhen(p.last_scraped_at)}
-                </p>
-
-                {p.last_scrape_error && (
-                  <p className="error scrape-hint" title={p.last_scrape_error}>
-                    Scrape failed — refresh to retry
-                  </p>
-                )}
-
-                <div className="product-card-actions">
-                  {p.group_id && (
-                    <Link
-                      to={`/compare?group=${p.group_id}`}
-                      className="btn-ghost"
-                    >
-                      Compare
-                    </Link>
-                  )}
-
-                  <Link
-                    to={`/products/${p.id}`}
-                    className="btn-ghost primary"
-                  >
-                    Chart
-                  </Link>
-
-                  <button
-                    type="button"
-                    className="btn-ghost danger"
-                    disabled={deletingId === p.id}
-                    onClick={() => handleDelete(p.id, p.name)}
-                  >
-                    {deletingId === p.id ? 'Deleting…' : 'Delete'}
-                  </button>
+                <div>
+                  <span className="muted">Change</span>
+                  <Change stats={s} />
+                </div>
+                <div>
+                  <span className="muted">Store</span>
+                  <PlatformBadge platform={p.platform} />
                 </div>
               </div>
-            </article>
-          ))}
+              <div className="mcard-foot">
+                <Sparkline values={s?.series} tone={sparkTone(s)} width={120} />
+                {actions(p)}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <Modal open={!!toDelete} onClose={() => !deleting && setToDelete(null)} title="Delete this product?" size="sm">
+        <p className="muted">
+          <strong>{toDelete?.name}</strong> and all of its recorded price history will be permanently removed. This cannot be undone.
+        </p>
+        <div className="form-actions">
+          <button type="button" className="btn btn-secondary" onClick={() => setToDelete(null)} disabled={deleting}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-danger" onClick={confirmDelete} disabled={deleting}>
+            {deleting ? 'Deleting…' : 'Delete product'}
+          </button>
         </div>
-      )}
-    </section>
+      </Modal>
+    </>
   );
 }

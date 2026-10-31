@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
+import { useApp } from '../context/AppContext';
+import { formatINR, formatPct } from '../lib/format';
 import CompareChart from '../components/CompareChart';
 import CompareInsights from '../components/CompareInsights';
+import Icon from '../components/Icon';
+import PlatformBadge from '../components/PlatformBadge';
 import ProductImage from '../components/ProductImage';
-
-function formatPrice(v) {
-  if (v == null) return '—';
-  return `₹${Number(v).toLocaleString('en-IN')}`;
-}
+import { EmptyState, ErrorState, Skeleton } from '../components/States';
 
 function daysAgoISO(days) {
   const d = new Date();
@@ -18,6 +18,7 @@ function daysAgoISO(days) {
 
 export default function ComparePage() {
   const [searchParams] = useSearchParams();
+  const { openTrack, dataVersion } = useApp();
   const [groups, setGroups] = useState([]);
   const [groupId, setGroupId] = useState(searchParams.get('group') || '');
   const [from, setFrom] = useState('');
@@ -27,23 +28,23 @@ export default function ComparePage() {
   const [loadingCompare, setLoadingCompare] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const data = await api.getGroups();
-        setGroups(data);
-        if (data.length && !groupId) {
-          setGroupId(String(data[0].id));
-        }
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const loadGroups = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await api.getGroups();
+      setGroups(data);
+      setGroupId((cur) => (cur || !data.length ? cur : String(data[0].id)));
+    } catch (err) {
+      setError(err.message || 'Unable to load groups.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadGroups();
+  }, [loadGroups, dataVersion]);
 
   const loadCompare = useCallback(async () => {
     if (!groupId) return;
@@ -57,10 +58,9 @@ export default function ComparePage() {
         end.setHours(23, 59, 59, 999);
         params.to = end.toISOString();
       }
-      const data = await api.compareGroup(groupId, params);
-      setCompare(data);
+      setCompare(await api.compareGroup(groupId, params));
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Unable to load comparison.');
     } finally {
       setLoadingCompare(false);
     }
@@ -81,149 +81,119 @@ export default function ComparePage() {
   };
 
   const selectedGroup = groups.find((g) => String(g.id) === String(groupId));
-
-  if (loading) return <p className="loading-pulse">Loading groups…</p>;
+  const rangeKey = !from && !to ? 'all' : from === daysAgoISO(7) ? '7' : from === daysAgoISO(14) ? '14' : 'custom';
 
   return (
     <>
-      <Link to="/" className="back-link">
-        ← Back to list
-      </Link>
-      <div className="card">
-        <h2>Cross-platform compare (RQ1)</h2>
-        <p className="muted">
-          Compare price fluctuations for the same product on Amazon vs Flipkart.
-        </p>
+      <div className="page-head">
+        <div>
+          <h1>Compare stores</h1>
+          <p className="muted">See how the same product’s price moves on Amazon and Flipkart.</p>
+        </div>
+      </div>
 
-        {groups.length === 0 ? (
-          <p>
-            No product groups yet. Add products with the same <strong>Group name</strong> on
-            different platforms.
-          </p>
-        ) : (
-          <>
-            <div className="group-picker">
-              {groups.map((g) => {
-                const products = g.products ?? [];
-                const platforms = products.map((p) => p.platform).join(' + ') || '—';
-                const active = String(g.id) === String(groupId);
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    className={`group-card ${active ? 'active' : ''}`}
-                    onClick={() => setGroupId(String(g.id))}
-                  >
-                    <strong>{g.name}</strong>
-                    {g.category && <span className="muted"> · {g.category}</span>}
-                    <div className="group-card-meta">{platforms}</div>
-                  </button>
-                );
-              })}
-            </div>
+      {loading ? (
+        <div className="card"><Skeleton style={{ height: 90, marginBottom: 14 }} /><Skeleton style={{ height: 280 }} /></div>
+      ) : error && !groups.length ? (
+        <ErrorState message={error} onRetry={loadGroups} />
+      ) : groups.length === 0 ? (
+        <div className="card">
+          <EmptyState icon="compare" title="No product groups yet" action={<button type="button" className="btn btn-primary btn-sm" onClick={openTrack}><Icon name="plus" size={15} strokeWidth={2.2} /> Track a product</button>}>
+            Track the same product on both stores using the same group name to compare them here.
+          </EmptyState>
+        </div>
+      ) : (
+        <>
+          <div className="group-picker" role="listbox" aria-label="Product groups">
+            {groups.map((g) => {
+              const platforms = (g.products ?? []).map((p) => p.platform);
+              const active = String(g.id) === String(groupId);
+              return (
+                <button key={g.id} type="button" role="option" aria-selected={active} className={`group-card ${active ? 'active' : ''}`} onClick={() => setGroupId(String(g.id))}>
+                  <strong>{g.name}</strong>
+                  <span className="muted">{g.category || 'Uncategorised'}</span>
+                  <span className="group-card-stores">
+                    {platforms.length ? platforms.map((p, i) => <PlatformBadge key={`${p}-${i}`} platform={p} />) : <span className="muted">No products</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-            <div className="filter-row">
-              <label>
-                From
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-              </label>
-              <label>
-                To
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-              </label>
-              <div className="preset-btns">
-                <button type="button" className="secondary" onClick={() => setRange(7)}>
-                  7 days
-                </button>
-                <button type="button" className="secondary" onClick={() => setRange(14)}>
-                  14 days
-                </button>
-                <button type="button" className="secondary" onClick={() => setRange(null)}>
-                  All
-                </button>
+          <div className="card filter-card">
+            <div className="range-row">
+              <label className="field-inline"><span>From</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+              <label className="field-inline"><span>To</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+              <div className="segmented" role="group" aria-label="Quick range">
+                <button type="button" aria-pressed={rangeKey === '7'} className={rangeKey === '7' ? 'active' : ''} onClick={() => setRange(7)}>7 days</button>
+                <button type="button" aria-pressed={rangeKey === '14'} className={rangeKey === '14' ? 'active' : ''} onClick={() => setRange(14)}>14 days</button>
+                <button type="button" aria-pressed={rangeKey === 'all'} className={rangeKey === 'all' ? 'active' : ''} onClick={() => setRange(null)}>All</button>
               </div>
-              <button type="button" onClick={loadCompare} disabled={loadingCompare}>
-                {loadingCompare ? 'Loading…' : 'Apply'}
-              </button>
             </div>
+          </div>
 
-            {error && <p className="error">{error}</p>}
+          {error && <ErrorState message={error} onRetry={loadCompare} />}
 
-            {loadingCompare && <p className="loading-pulse">Updating chart…</p>}
-
-            {compare && !loadingCompare && (
-              <>
+          {loadingCompare && !compare ? (
+            <div className="card"><Skeleton style={{ height: 320 }} /></div>
+          ) : (
+            compare && (
+              <div className={`compare-body ${loadingCompare ? 'dim' : ''}`}>
                 <CompareInsights stats={compare.stats} />
 
                 {selectedGroup?.products?.length > 0 && (
-                  <div className="live-prices-row">
+                  <div className="live-prices">
                     {selectedGroup.products.map((p) => (
-                      <a
-                        key={p.id}
-                        href={p.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="live-price-chip"
-                      >
-                        <ProductImage
-                          src={p.image_url}
-                          alt={p.name}
-                          platform={p.platform}
-                          size="md"
-                        />
-                        <span className={`badge badge-${p.platform}`}>{p.platform}</span>
-                        {p.latest_price != null
-                          ? formatPrice(p.latest_price)
-                          : 'No price yet'}
-                      </a>
+                      <Link key={p.id} to={`/products/${p.id}`} className="live-price">
+                        <ProductImage src={p.image_url} alt={p.name} platform={p.platform} size="sm" />
+                        <div>
+                          <PlatformBadge platform={p.platform} />
+                          <strong className="price">{p.latest_price != null ? formatINR(p.latest_price) : 'No price yet'}</strong>
+                        </div>
+                      </Link>
                     ))}
                   </div>
                 )}
 
-                <div className="card inner-card">
-                  <h3>{compare.group.name}</h3>
+                <div className="card">
+                  <div className="card-head"><div><h2>{compare.group.name}</h2><p className="muted">Price over time by store</p></div></div>
                   <CompareChart series={compare.series} />
                 </div>
 
                 {compare.stats?.length > 0 && (
-                  <table className="stats-table">
-                    <thead>
-                      <tr>
-                        <th>Platform</th>
-                        <th>Min</th>
-                        <th>Max</th>
-                        <th>Avg</th>
-                        <th>Std dev</th>
-                        <th>% change</th>
-                        <th>Points</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {compare.stats.map((row) => (
-                        <tr key={row.platform}>
-                          <td>
-                            <span className="badge">{row.platform}</span>
-                          </td>
-                          <td>{formatPrice(row.min)}</td>
-                          <td>{formatPrice(row.max)}</td>
-                          <td>{formatPrice(row.avg)}</td>
-                          <td>{row.stdDev != null ? row.stdDev : '—'}</td>
-                          <td>
-                            {row.pctChange != null
-                              ? `${row.pctChange > 0 ? '+' : ''}${row.pctChange}%`
-                              : '—'}
-                          </td>
-                          <td>{row.count}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <section className="card table-card">
+                    <div className="card-head"><div><h2>Statistics</h2><p className="muted">For the selected period</p></div></div>
+                    <div className="table-wrap always">
+                      <table className="table">
+                        <thead>
+                          <tr><th>Store</th><th className="num">Min</th><th className="num">Max</th><th className="num">Avg</th><th className="num">Std dev</th><th className="num">% change</th><th className="num">Points</th></tr>
+                        </thead>
+                        <tbody>
+                          {compare.stats.map((row) => (
+                            <tr key={row.platform}>
+                              <td><PlatformBadge platform={row.platform} /></td>
+                              <td className="num">{formatINR(row.min)}</td>
+                              <td className="num">{formatINR(row.max)}</td>
+                              <td className="num">{formatINR(row.avg)}</td>
+                              <td className="num">{row.stdDev != null ? row.stdDev : '—'}</td>
+                              <td className="num">
+                                {row.pctChange != null ? (
+                                  <span className={`change change-${row.pctChange < 0 ? 'down' : row.pctChange > 0 ? 'up' : 'flat'}`}>{formatPct(row.pctChange)}</span>
+                                ) : '—'}
+                              </td>
+                              <td className="num">{row.count}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
                 )}
-              </>
-            )}
-          </>
-        )}
-      </div>
+              </div>
+            )
+          )}
+        </>
+      )}
     </>
   );
 }

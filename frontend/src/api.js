@@ -31,4 +31,5 @@ export const api = {
     return request(`/groups/${id}/compare${qs ? `?${qs}` : ''}`);
   },
   getDashboard: () => request('/analytics/dashboard'),
+  getHealth: () => request('/health'),
 };
