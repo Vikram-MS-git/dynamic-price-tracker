@@ -20,8 +20,9 @@ export function validateProductInput({ name, url, platform, category }) {
   return errors;
 }
 
-export async function addProduct(data) {
+export async function addProduct(userId, data) {
   const group = await groupService.resolveGroupForProduct({
+    userId,
     groupId: data.groupId ? Number(data.groupId) : undefined,
     groupName: data.groupName,
     name: data.name,
@@ -34,23 +35,24 @@ export async function addProduct(data) {
     platform: data.platform.toLowerCase(),
     category: data.category?.trim() || null,
     groupId: group.id,
+    userId,
   });
 }
 
-export async function removeProduct(id) {
-  return productModel.deleteProduct(id);
+export async function removeProduct(userId, id) {
+  return productModel.deleteProduct(id, userId);
 }
 
-export async function listProducts() {
-  return productModel.getAllProducts();
+export async function listProducts(userId) {
+  return productModel.getAllProducts(userId);
 }
 
-export async function getProduct(id) {
-  return productModel.getProductById(id);
+export async function getProduct(userId, id) {
+  return productModel.getProductById(id, userId);
 }
 
-export async function getProductPrices(id, dateRange) {
-  const product = await productModel.getProductById(id);
+export async function getProductPrices(userId, id, dateRange) {
+  const product = await productModel.getProductById(id, userId);
   if (!product) return null;
   const prices = await productModel.getPriceHistory(id, dateRange);
   return { product, prices };
@@ -71,8 +73,8 @@ export async function scrapeAndStore(product) {
   return row;
 }
 
-export async function scrapeProductById(id) {
-  const product = await productModel.getProductById(id);
+export async function scrapeProductById(userId, id) {
+  const product = await productModel.getProductById(id, userId);
   if (!product) return null;
   try {
     const row = await scrapeAndStore(product);

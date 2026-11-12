@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 const AppContext = createContext(null);
-const ALERTS_KEY = 'dpt.alerts.v1';
+// Price-alert targets are stored per user so accounts on one browser stay separate.
+const alertsKey = (userId) => `dpt.alerts.v1.${userId}`;
 
-function readAlerts() {
+function readAlerts(userId) {
+  if (!userId) return {};
   try {
-    const raw = localStorage.getItem(ALERTS_KEY);
+    const raw = localStorage.getItem(alertsKey(userId));
     const parsed = raw ? JSON.parse(raw) : {};
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
@@ -13,18 +15,20 @@ function readAlerts() {
   }
 }
 
-export function AppProvider({ children }) {
+// Mounted with key={userId} (see main.jsx) so state resets on login/logout.
+export function AppProvider({ children, userId }) {
   const [trackOpen, setTrackOpen] = useState(false);
   const [dataVersion, setDataVersion] = useState(0);
-  const [alerts, setAlerts] = useState(readAlerts);
+  const [alerts, setAlerts] = useState(() => readAlerts(userId));
 
   useEffect(() => {
+    if (!userId) return;
     try {
-      localStorage.setItem(ALERTS_KEY, JSON.stringify(alerts));
+      localStorage.setItem(alertsKey(userId), JSON.stringify(alerts));
     } catch {
       /* storage unavailable: alerts stay in memory for this session */
     }
-  }, [alerts]);
+  }, [alerts, userId]);
 
   const refreshData = useCallback(() => setDataVersion((v) => v + 1), []);
 

@@ -1,29 +1,29 @@
 import { query } from '../config/db.js';
 
-export async function createGroup({ name, category }) {
+export async function createGroup({ name, category, userId }) {
   const result = await query(
-    `INSERT INTO product_groups (name, category)
-     VALUES ($1, $2)
+    `INSERT INTO product_groups (name, category, user_id)
+     VALUES ($1, $2, $3)
      RETURNING *`,
-    [name, category ?? null]
+    [name, category ?? null, userId]
   );
   return result.rows[0];
 }
 
-export async function findGroupByName(name) {
+export async function findGroupByName(name, userId) {
   const result = await query(
-    `SELECT * FROM product_groups WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-    [name]
+    `SELECT * FROM product_groups WHERE LOWER(name) = LOWER($1) AND user_id = $2 LIMIT 1`,
+    [name, userId]
   );
   return result.rows[0] ?? null;
 }
 
-export async function getGroupById(id) {
-  const result = await query(`SELECT * FROM product_groups WHERE id = $1`, [id]);
+export async function getGroupById(id, userId) {
+  const result = await query(`SELECT * FROM product_groups WHERE id = $1 AND user_id = $2`, [id, userId]);
   return result.rows[0] ?? null;
 }
 
-export async function getAllGroups() {
+export async function getAllGroups(userId) {
   const result = await query(
     `SELECT g.*,
             COALESCE(
@@ -43,7 +43,7 @@ export async function getAllGroups() {
               '[]'
             ) AS products
      FROM product_groups g
-     LEFT JOIN products p ON p.group_id = g.id
+     LEFT JOIN products p ON p.group_id = g.id AND p.user_id = g.user_id
      LEFT JOIN LATERAL (
        SELECT price, scraped_at
        FROM price_history
@@ -51,8 +51,10 @@ export async function getAllGroups() {
        ORDER BY scraped_at DESC
        LIMIT 1
      ) lp ON true
+     WHERE g.user_id = $1
      GROUP BY g.id
-     ORDER BY g.name ASC`
+     ORDER BY g.name ASC`,
+    [userId]
   );
   return result.rows;
 }

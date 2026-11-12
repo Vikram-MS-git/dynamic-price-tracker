@@ -2,7 +2,7 @@ import * as groupService from '../services/groupService.js';
 
 export async function listGroups(req, res, next) {
   try {
-    const groups = await groupService.listGroups();
+    const groups = await groupService.listGroups(req.user.id);
     res.json(groups);
   } catch (err) {
     next(err);
@@ -15,7 +15,7 @@ export async function compareGroup(req, res, next) {
     if (!Number.isInteger(id) || id < 1) {
       return res.status(400).json({ error: 'Invalid group id' });
     }
-    const result = await groupService.compareGroup(id, {
+    const result = await groupService.compareGroup(req.user.id, id, {
       from: req.query.from,
       to: req.query.to,
     });

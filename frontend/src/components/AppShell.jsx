@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import Avatar from './Avatar';
 import Icon from './Icon';
 import ThemeToggle from './ThemeToggle';
 import Modal from './Modal';
@@ -9,9 +11,10 @@ import AddProductForm from './AddProductForm';
 import { useToast } from '../context/ToastContext';
 
 const NAV = [
-  { to: '/', label: 'Dashboard', icon: 'dashboard', end: true },
+  { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', end: true },
   { to: '/compare', label: 'Compare', icon: 'compare' },
   { to: '/alerts', label: 'Price alerts', icon: 'bell', badge: true },
+  { to: '/profile', label: 'Profile', icon: 'user' },
 ];
 
 function useApiStatus() {
@@ -38,7 +41,7 @@ function GlobalSearch() {
   const location = useLocation();
   const navigate = useNavigate();
   const inputRef = useRef(null);
-  const value = location.pathname === '/' ? params.get('q') || '' : '';
+  const value = location.pathname === '/dashboard' ? params.get('q') || '' : '';
 
   useEffect(() => {
     const onKey = (e) => {
@@ -54,8 +57,8 @@ function GlobalSearch() {
 
   const onChange = (e) => {
     const q = e.target.value;
-    if (location.pathname !== '/') {
-      navigate(q ? `/?q=${encodeURIComponent(q)}` : '/');
+    if (location.pathname !== '/dashboard') {
+      navigate(q ? `/dashboard?q=${encodeURIComponent(q)}` : '/dashboard');
       return;
     }
     const next = new URLSearchParams(params);
@@ -80,6 +83,62 @@ function GlobalSearch() {
   );
 }
 
+function UserMenu() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => {
+      if (!ref.current?.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const handleLogout = () => {
+    setOpen(false);
+    logout();
+    navigate('/', { replace: true });
+  };
+
+  return (
+    <div className="user-menu" ref={ref}>
+      <button
+        type="button"
+        className="user-btn"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Account menu for ${user.name}`}
+      >
+        <Avatar name={user.name} size={30} />
+      </button>
+      {open && (
+        <div className="user-pop" role="menu">
+          <div className="user-pop-head">
+            <strong>{user.name}</strong>
+            <span className="muted">{user.email}</span>
+          </div>
+          <Link to="/profile" role="menuitem" className="user-pop-item" onClick={() => setOpen(false)}>
+            <Icon name="user" size={16} /> Profile
+          </Link>
+          <button type="button" role="menuitem" className="user-pop-item" onClick={handleLogout}>
+            <Icon name="logout" size={16} /> Log out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AppShell({ children }) {
   const [drawer, setDrawer] = useState(false);
   const location = useLocation();
@@ -96,12 +155,12 @@ export default function AppShell({ children }) {
         Skip to content
       </a>
       <aside className="sidebar" aria-label="Primary">
-        <div className="brand">
+        <Link to="/dashboard" className="brand">
           <div className="brand-mark">
             <Icon name="chart" size={16} strokeWidth={2.2} />
           </div>
           <span className="brand-name">PriceTracker</span>
-        </div>
+        </Link>
 
         <nav className="nav">
           {NAV.map((item) => (
@@ -136,6 +195,7 @@ export default function AppShell({ children }) {
               <Icon name="plus" size={16} strokeWidth={2.2} />
               <span className="btn-label">Track New Product</span>
             </button>
+            <UserMenu />
           </div>
         </header>
 

@@ -18,6 +18,8 @@ Stack: **Neon** (PostgreSQL) + **Railway** or **Render** (API) + **Vercel** (fro
 | Variable | Example |
 |----------|---------|
 | `DATABASE_URL` | Neon connection string |
+| `JWT_SECRET` | Long random string (required). `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
+| `NODE_ENV` | `production` |
 | `PORT` | `3001` (Railway sets `PORT` automatically — use `${{PORT}}` or leave unset) |
 | `SCRAPE_CRON` | `0 */6 * * *` |
 | `SCRAPE_USER_AGENT` | Browser user-agent string |
@@ -29,7 +31,8 @@ Stack: **Neon** (PostgreSQL) + **Railway** or **Render** (API) + **Vercel** (fro
 ```bash
 cd backend
 DATABASE_URL="your-neon-url" npm run migrate
-DATABASE_URL="your-neon-url" npm run seed:demo
+# optional demo data for an account you registered in the app:
+DATABASE_URL="your-neon-url" npm run seed:rq1 -- you@example.com
 ```
 
 8. Copy public API URL (e.g. `https://your-app.up.railway.app`)

@@ -88,7 +88,7 @@ export default function AlertsPage() {
         <div className="card"><Skeleton style={{ height: 70, marginBottom: 12 }} /><Skeleton style={{ height: 70 }} /></div>
       ) : ids.length === 0 ? (
         <div className="card">
-          <EmptyState icon="bell" title="No price alerts yet" action={<Link to="/" className="btn btn-primary btn-sm">Choose a product</Link>}>
+          <EmptyState icon="bell" title="No price alerts yet" action={<Link to="/dashboard" className="btn btn-primary btn-sm">Choose a product</Link>}>
             Open a product, enter a target price, and it will be listed here.
           </EmptyState>
         </div>

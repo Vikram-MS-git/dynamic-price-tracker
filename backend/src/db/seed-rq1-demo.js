@@ -7,6 +7,10 @@ import pool from '../config/db.js';
 
 dotenv.config();
 
+// Demo data belongs to one account. Usage: npm run seed:rq1 -- you@example.com
+// (or set SEED_USER_EMAIL). Register in the app first.
+const SEED_EMAIL = (process.argv[2] || process.env.SEED_USER_EMAIL || '').trim().toLowerCase();
+
 const DEMO_GROUPS = [
   {
     name: 'Wireless Earbuds',
@@ -35,16 +39,16 @@ function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
 
-async function findOrCreateGroup(name, category) {
+async function findOrCreateGroup(userId, name, category) {
   const existing = await pool.query(
-    `SELECT id FROM product_groups WHERE LOWER(name) = LOWER($1) LIMIT 1`,
-    [name]
+    `SELECT id FROM product_groups WHERE LOWER(name) = LOWER($1) AND user_id = $2 LIMIT 1`,
+    [name, userId]
   );
   if (existing.rows[0]) return existing.rows[0].id;
 
   const created = await pool.query(
-    `INSERT INTO product_groups (name, category) VALUES ($1, $2) RETURNING id`,
-    [name, category]
+    `INSERT INTO product_groups (name, category, user_id) VALUES ($1, $2, $3) RETURNING id`,
+    [name, category, userId]
   );
   return created.rows[0].id;
 }
@@ -57,16 +61,16 @@ async function findProduct(groupId, platform) {
   return result.rows[0]?.id ?? null;
 }
 
-async function createProduct(groupId, name, platform, category) {
+async function createProduct(userId, groupId, name, platform, category) {
   const url =
     platform === 'amazon'
       ? `https://www.amazon.in/dp/demo-${groupId}`
       : `https://www.flipkart.com/demo-p-${groupId}`;
   const result = await pool.query(
-    `INSERT INTO products (name, url, platform, category, group_id)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO products (name, url, platform, category, group_id, user_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
-    [`${name} (${platform})`, url, platform, category, groupId]
+    [`${name} (${platform})`, url, platform, category, groupId, userId]
   );
   return result.rows[0].id;
 }
@@ -98,16 +102,23 @@ async function seedPrices(productId, basePrice) {
 }
 
 async function main() {
+  if (!SEED_EMAIL) {
+    throw new Error('Pass the account email: npm run seed:rq1 -- you@example.com');
+  }
+  const { rows: users } = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1', [SEED_EMAIL]);
+  if (!users[0]) throw new Error(`No account for ${SEED_EMAIL}. Register in the app first.`);
+  const userId = users[0].id;
+
   let productsCreated = 0;
   let pricesInserted = 0;
 
   for (const item of DEMO_GROUPS) {
-    const groupId = await findOrCreateGroup(item.name, item.category);
+    const groupId = await findOrCreateGroup(userId, item.name, item.category);
 
     for (const platform of ['amazon', 'flipkart']) {
       let productId = await findProduct(groupId, platform);
       if (!productId) {
-        productId = await createProduct(groupId, item.name, platform, item.category);
+        productId = await createProduct(userId, groupId, item.name, platform, item.category);
         productsCreated += 1;
         console.log(`Created ${platform} product for "${item.name}" (id ${productId})`);
       }
@@ -128,5 +139,5 @@ async function main() {
 
 main().catch((err) => {
   console.error('seed-rq1-demo failed:', err.message);
-  process.exit(1);
+  pool.end().finally(() => process.exit(1));
 });

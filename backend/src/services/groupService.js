@@ -27,31 +27,32 @@ function computeStats(points) {
   };
 }
 
-export async function resolveGroupForProduct({ groupId, groupName, name, category }) {
+export async function resolveGroupForProduct({ userId, groupId, groupName, name, category }) {
   if (groupId) {
-    const group = await groupModel.getGroupById(groupId);
-    if (!group) throw new Error('Product group not found');
+    const group = await groupModel.getGroupById(groupId, userId);
+    if (!group) throw Object.assign(new Error('Product group not found'), { status: 404 });
     return group;
   }
 
   const resolvedName = (groupName || name)?.trim();
   if (!resolvedName) throw new Error('group name or product name is required');
 
-  const existing = await groupModel.findGroupByName(resolvedName);
+  const existing = await groupModel.findGroupByName(resolvedName, userId);
   if (existing) return existing;
 
   return groupModel.createGroup({
     name: resolvedName,
     category: category?.trim() || null,
+    userId,
   });
 }
 
-export async function listGroups() {
-  return groupModel.getAllGroups();
+export async function listGroups(userId) {
+  return groupModel.getAllGroups(userId);
 }
 
-export async function compareGroup(groupId, dateRange = {}) {
-  const group = await groupModel.getGroupById(groupId);
+export async function compareGroup(userId, groupId, dateRange = {}) {
+  const group = await groupModel.getGroupById(groupId, userId);
   if (!group) return null;
 
   const products = await groupModel.getProductsInGroup(groupId);
@@ -87,6 +88,11 @@ export async function compareGroup(groupId, dateRange = {}) {
   return { group, series, stats };
 }
 
-export async function assignProductToGroup(productId, groupId) {
+export async function assignProductToGroup(userId, productId, groupId) {
+  const [product, group] = await Promise.all([
+    productModel.getProductById(productId, userId),
+    groupModel.getGroupById(groupId, userId),
+  ]);
+  if (!product || !group) return null;
   return productModel.updateProductGroup(productId, groupId);
 }

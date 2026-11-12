@@ -19,8 +19,11 @@ export function startScheduler() {
   console.log(`[scheduler] Started with cron: ${validSchedule}`);
 }
 
-export async function runScrapeJob() {
-  const products = await productModel.getAllProducts();
+/** Scrape one user's products, or everyone's when no userId is given (cron). */
+export async function runScrapeJob({ userId } = {}) {
+  const products = userId
+    ? await productModel.getAllProducts(userId)
+    : await productModel.getAllProductsForScheduler();
   const results = [];
   let scraped = 0;
   let failed = 0;

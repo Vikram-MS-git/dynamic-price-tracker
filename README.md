@@ -6,6 +6,7 @@ Academic project: track product prices on **Amazon** and **Flipkart**, store tim
 
 ## Features
 
+- **Accounts**: public home page, sign up / log in (JWT), and a profile page. Every user has their own private products, groups, alerts and dashboard
 - Add products with **product groups** (same item on Amazon + Flipkart)
 - Scheduled scraping (node-cron) + **manual refresh**
 - Per-product price charts and **cross-platform compare** page with stats (min, max, avg, std dev, % change)
@@ -42,10 +43,11 @@ copy .env.example .env
 
 Edit `DATABASE_URL` in `.env`, then:
 
+Also set `JWT_SECRET` in `.env` to a long random string (see [Accounts](#accounts-and-per-user-data)), then:
+
 ```bash
 npm install
 npm run migrate
-npm run seed:demo
 npm run dev
 ```
 
@@ -57,13 +59,15 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173
+Open http://localhost:5173, click **Create free account**, and register. The home page is public; the dashboard, compare, alerts and profile pages require login.
 
 ### 3. Demo data
 
+Demo data is created for a specific account, so register first, then run:
+
 ```bash
-npm run seed:rq1    # 3 groups × Amazon + Flipkart + price history (for Compare page)
-npm run seed:demo   # fills any product still missing history (idempotent)
+npm run seed:rq1 -- you@example.com   # 3 groups × Amazon + Flipkart + price history (for Compare page)
+npm run seed:demo                     # fills any product still missing history (idempotent)
 ```
 
 `seed:demo` inserts 15–30 sample price points per product over the last 14 days (skips products that already have enough history). Safe to re-run.
@@ -78,7 +82,28 @@ npm run seed:demo   # fills any product still missing history (idempotent)
 2. Open **Compare (RQ1)** in the nav bar.
 3. Select the group → multi-line chart + statistics table.
 
+## Accounts and per-user data
+
+- Sign up and log in at `/register` and `/login`. Passwords are hashed with bcrypt; sessions are signed JWTs (default 7 days, set `JWT_EXPIRES_IN` to change) that the frontend sends as `Authorization: Bearer <token>`.
+- Each user only ever sees their own products, groups, price history, dashboard stats and alerts. Another user's product or group returns `404`.
+- **Profile** page: change name, email and password, and see account stats.
+- If you already had products from before accounts existed, the **first account you register claims them**.
+- Set `JWT_SECRET` (required in production). Generate one with:
+  `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`
+- Run `npm run migrate` after pulling this change (adds the `users` table and `user_id` columns).
+- Pages: `/` home (public), `/login`, `/register`, `/dashboard`, `/compare`, `/alerts`, `/profile`.
+
 ## API endpoints
+
+Everything except `/health`, `POST /auth/register` and `POST /auth/login` requires a login token.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/auth/register` | Create account `{ name, email, password }` |
+| POST | `/auth/login` | Log in `{ email, password }` → `{ user, token }` |
+| GET | `/auth/me` | Current user + stats |
+| PATCH | `/auth/me` | Update `{ name, email }` |
+| PUT | `/auth/password` | Change `{ currentPassword, newPassword }` |
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -123,13 +148,16 @@ Production frontend: set `VITE_API_URL` to your API URL (see `frontend/.env.exam
 |----------|---------|---------|
 | `PORT` | 3001 | API port |
 | `DATABASE_URL` | — | PostgreSQL connection string |
+| `JWT_SECRET` | — (required in production) | Signs login tokens |
+| `JWT_EXPIRES_IN` | `7d` | Login lifetime |
 | `SCRAPE_CRON` | `0 */6 * * *` | Cron schedule |
 | `SCRAPE_USER_AGENT` | browser UA | HTTP header for scraper |
 | `VITE_API_URL` | `/api` (dev proxy) | Frontend API base URL |
 
 ## Screenshots (add for report)
 
-1. Home — product list with latest prices  
+1. Home page, Login and Register
+1. Dashboard — product list with latest prices  
 2. Product detail — price chart  
 3. Compare (RQ1) — dual-platform chart + stats table  
 

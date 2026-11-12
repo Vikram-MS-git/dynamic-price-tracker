@@ -1,11 +1,11 @@
 import { query } from '../config/db.js';
 
-export async function createProduct({ name, url, platform, category, groupId }) {
+export async function createProduct({ name, url, platform, category, groupId, userId }) {
   const result = await query(
-    `INSERT INTO products (name, url, platform, category, group_id)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO products (name, url, platform, category, group_id, user_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [name, url, platform, category ?? null, groupId ?? null]
+    [name, url, platform, category ?? null, groupId ?? null, userId]
   );
   return result.rows[0];
 }
@@ -18,8 +18,8 @@ export async function updateProductGroup(productId, groupId) {
   return result.rows[0] ?? null;
 }
 
-export async function deleteProduct(id) {
-  const result = await query(`DELETE FROM products WHERE id = $1 RETURNING id`, [id]);
+export async function deleteProduct(id, userId) {
+  const result = await query(`DELETE FROM products WHERE id = $1 AND user_id = $2 RETURNING id`, [id, userId]);
   return result.rows[0] ?? null;
 }
 
@@ -39,9 +39,7 @@ export async function updateProductImage(productId, imageUrl) {
   await query(`UPDATE products SET image_url = $2 WHERE id = $1`, [productId, imageUrl]);
 }
 
-export async function getAllProducts() {
-  const result = await query(
-    `SELECT p.*,
+const PRODUCT_WITH_LATEST = `SELECT p.*,
             lp.price AS latest_price,
             lp.scraped_at AS last_scraped_at,
             p.last_scrape_error
@@ -52,14 +50,25 @@ export async function getAllProducts() {
        WHERE product_id = p.id
        ORDER BY scraped_at DESC
        LIMIT 1
-     ) lp ON true
-     ORDER BY p.created_at DESC`
+     ) lp ON true`;
+
+/** Products owned by one user. */
+export async function getAllProducts(userId) {
+  const result = await query(
+    `${PRODUCT_WITH_LATEST} WHERE p.user_id = $1 ORDER BY p.created_at DESC`,
+    [userId]
   );
   return result.rows;
 }
 
-export async function getProductById(id) {
-  const result = await query(`SELECT * FROM products WHERE id = $1`, [id]);
+/** Every user's products. Only for the background scheduler. */
+export async function getAllProductsForScheduler() {
+  const result = await query(`${PRODUCT_WITH_LATEST} ORDER BY p.created_at DESC`);
+  return result.rows;
+}
+
+export async function getProductById(id, userId) {
+  const result = await query(`SELECT * FROM products WHERE id = $1 AND user_id = $2`, [id, userId]);
   return result.rows[0] ?? null;
 }
 

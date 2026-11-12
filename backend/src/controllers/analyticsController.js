@@ -2,7 +2,7 @@ import * as analyticsService from '../services/analyticsService.js';
 
 export async function getDashboard(req, res, next) {
   try {
-    const data = await analyticsService.getDashboardStats();
+    const data = await analyticsService.getDashboardStats(req.user.id);
     res.json(data);
   } catch (err) {
     next(err);

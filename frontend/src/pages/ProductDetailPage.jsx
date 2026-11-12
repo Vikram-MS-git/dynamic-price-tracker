@@ -191,7 +191,7 @@ export default function ProductDetailPage() {
   if (error && !product) {
     return (
       <>
-        <Link to="/" className="back-link"><Icon name="arrowLeft" size={16} /> Dashboard</Link>
+        <Link to="/dashboard" className="back-link"><Icon name="arrowLeft" size={16} /> Dashboard</Link>
         <ErrorState message={error} onRetry={() => loadPrices()} />
       </>
     );
@@ -202,7 +202,7 @@ export default function ProductDetailPage() {
 
   return (
     <>
-      <Link to="/" className="back-link"><Icon name="arrowLeft" size={16} /> Dashboard</Link>
+      <Link to="/dashboard" className="back-link"><Icon name="arrowLeft" size={16} /> Dashboard</Link>
 
       <div className="card hero">
         <ProductImage src={product.image_url} alt={product.name} platform={product.platform} size="xl" />
