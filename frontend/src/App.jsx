@@ -8,6 +8,7 @@ import ProfilePage from './pages/ProfilePage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ComparePage from './pages/ComparePage';
 import AlertsPage from './pages/AlertsPage';
+import PCBuilderPage from './pages/PCBuilderPage';
 import { EmptyState } from './components/States';
 
 function NotFound() {
@@ -46,6 +47,7 @@ export default function App() {
       >
         <Route path="/dashboard" element={<HomePage />} />
         <Route path="/compare" element={<ComparePage />} />
+        <Route path="/pc-builder" element={<PCBuilderPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/products/:id" element={<ProductDetailPage />} />
         <Route path="/profile" element={<ProfilePage />} />

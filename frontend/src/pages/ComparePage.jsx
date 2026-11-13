@@ -7,6 +7,7 @@ import CompareChart from '../components/CompareChart';
 import CompareInsights from '../components/CompareInsights';
 import Icon from '../components/Icon';
 import PlatformBadge from '../components/PlatformBadge';
+import DataSourceBadge from '../components/DataSourceBadge';
 import ProductImage from '../components/ProductImage';
 import { EmptyState, ErrorState, Skeleton } from '../components/States';
 
@@ -148,7 +149,12 @@ export default function ComparePage() {
                         <ProductImage src={p.image_url} alt={p.name} platform={p.platform} size="sm" />
                         <div>
                           <PlatformBadge platform={p.platform} />
-                          <strong className="price">{p.latest_price != null ? formatINR(p.latest_price) : 'No price yet'}</strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                            <strong className="price">{p.latest_price != null ? formatINR(p.latest_price) : 'No price yet'}</strong>
+                            {p.latest_price != null && (
+                              <DataSourceBadge isSimulated={p.is_simulated} size="sm" />
+                            )}
+                          </div>
                         </div>
                       </Link>
                     ))}
@@ -170,8 +176,13 @@ export default function ComparePage() {
                         </thead>
                         <tbody>
                           {compare.stats.map((row) => (
-                            <tr key={row.platform}>
-                              <td><PlatformBadge platform={row.platform} /></td>
+                            <tr key={`${row.productId || row.platform}-${row.platform}`}>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <PlatformBadge platform={row.platform} />
+                                  {row.name && <small className="muted" style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>({row.name})</small>}
+                                </div>
+                              </td>
                               <td className="num">{formatINR(row.min)}</td>
                               <td className="num">{formatINR(row.max)}</td>
                               <td className="num">{formatINR(row.avg)}</td>

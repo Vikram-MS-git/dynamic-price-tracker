@@ -5,6 +5,9 @@ import productRoutes from './routes/productRoutes.js';
 import groupRoutes from './routes/groupRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import alertRoutes from './routes/alertRoutes.js';
+import demoRoutes from './routes/demoRoutes.js';
+import pcBuilderRoutes from './routes/pcBuilderRoutes.js';
 import { requireAuth } from './middleware/auth.js';
 
 /** Builds the Express app without starting a server (the tests use this too). */
@@ -36,6 +39,9 @@ export function createApp() {
   app.use('/products', requireAuth, productRoutes);
   app.use('/groups', requireAuth, groupRoutes);
   app.use('/analytics', requireAuth, analyticsRoutes);
+  app.use('/alerts', requireAuth, alertRoutes);
+  app.use('/demo', requireAuth, demoRoutes);
+  app.use('/pc-builder', requireAuth, pcBuilderRoutes);
 
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 

@@ -13,6 +13,7 @@ import { useToast } from '../context/ToastContext';
 const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', end: true },
   { to: '/compare', label: 'Compare', icon: 'compare' },
+  { to: '/pc-builder', label: 'PC Builder', icon: 'cpu' },
   { to: '/alerts', label: 'Price alerts', icon: 'bell', badge: true },
   { to: '/profile', label: 'Profile', icon: 'user' },
 ];
@@ -190,6 +191,9 @@ export default function AppShell({ children }) {
           </button>
           <GlobalSearch />
           <div className="topbar-actions">
+            <span className="data-badge data-badge-live" style={{ cursor: 'default' }} title="Real-Time Price Tracking Active">
+              <span className="status-dot" style={{ background: 'var(--good)', width: 6, height: 6 }} /> LIVE
+            </span>
             <ThemeToggle />
             <button type="button" className="btn btn-primary" onClick={openTrack}>
               <Icon name="plus" size={16} strokeWidth={2.2} />

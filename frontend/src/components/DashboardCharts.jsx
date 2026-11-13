@@ -1,16 +1,28 @@
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Skeleton } from './States';
 import { useChartColors } from '../lib/chartColors';
 import { formatINR } from '../lib/format';
 
+const STORE_COLORS = {
+  amazon: '#f59e0b',
+  flipkart: '#2563eb',
+};
+
 function Tip({ active, payload, label, name }) {
   if (!active || !payload?.length) return null;
+  const p = payload[0];
+  const item = p.payload;
   return (
     <div className="chart-tooltip">
       <p className="chart-tooltip-time">{label}</p>
       <p>
-        {name}: <strong>{formatINR(payload[0].value)}</strong>
+        {name}: <strong>{formatINR(p.value)}</strong>
       </p>
+      {item.products != null && (
+        <p className="text-xs muted" style={{ marginTop: '4px' }}>
+          {item.products} tracked product{item.products === 1 ? '' : 's'}
+        </p>
+      )}
     </div>
   );
 }
@@ -93,8 +105,12 @@ export default function DashboardCharts({ analytics, loading }) {
                 <CartesianGrid stroke={c.grid} vertical={false} />
                 <XAxis dataKey="platform" {...axis} />
                 <YAxis width={56} tickFormatter={(v) => formatINR(v, { compact: true })} {...axis} />
-                <Tooltip content={<Tip name="Avg" />} cursor={{ fill: c.grid, opacity: 0.4 }} />
-                <Bar dataKey="avgPrice" fill={c.accent} radius={[6, 6, 0, 0]} maxBarSize={56} />
+                <Tooltip content={<Tip name="Avg Price" />} cursor={{ fill: c.grid, opacity: 0.3 }} />
+                <Bar dataKey="avgPrice" radius={[6, 6, 0, 0]} maxBarSize={52}>
+                  {platformData.map((entry) => (
+                    <Cell key={entry.key} fill={STORE_COLORS[entry.key] || c.accent} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>

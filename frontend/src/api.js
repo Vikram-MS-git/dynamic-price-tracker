@@ -72,10 +72,36 @@ export const api = {
   scrapeProduct: (id) => request(`/products/${id}/scrape`, { method: 'POST' }),
   deleteProduct: (id) => request(`/products/${id}`, { method: 'DELETE' }),
   getGroups: () => request('/groups'),
+  updateGroup: (id, body) => request(`/groups/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteGroup: (id) => request(`/groups/${id}`, { method: 'DELETE' }),
+  assignProductGroup: (groupId, productId) => request(`/groups/${groupId}/assign`, { method: 'POST', body: JSON.stringify({ productId }) }),
   compareGroup: (id, params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/groups/${id}/compare${qs ? `?${qs}` : ''}`);
   },
   getDashboard: () => request('/analytics/dashboard'),
   getHealth: () => request('/health'),
+
+  // Server-side Persistent Price Alerts
+  getAlerts: () => request('/alerts'),
+  setAlert: (productId, targetPrice) => request('/alerts', { method: 'POST', body: JSON.stringify({ productId, targetPrice }) }),
+  removeAlert: (productId) => request(`/alerts/${productId}`, { method: 'DELETE' }),
+  triggerTestDrop: (productId) => request(`/alerts/${productId}/trigger-test-drop`, { method: 'POST' }),
+
+  // Academic Demo Engine
+  seedDemoDataset: () => request('/demo/seed', { method: 'POST' }),
+  resetDemoDataset: () => request('/demo/reset', { method: 'POST' }),
+  simulatePrice: (productId, body = {}) => request(`/demo/simulate/${productId}`, { method: 'POST', body: JSON.stringify(body) }),
+  simulateHistory: (productId, body = {}) => request(`/demo/simulate-history/${productId}`, { method: 'POST', body: JSON.stringify(body) }),
+
+  // PC Builder & Recommendation
+  getPcCatalog: () => request('/pc-builder/catalog'),
+  checkPcCompatibility: (components) => request('/pc-builder/check-compatibility', { method: 'POST', body: JSON.stringify({ components }) }),
+  getBuildRecommendations: (preferences) => request('/pc-builder/recommendations', { method: 'POST', body: JSON.stringify(preferences) }),
+  getPcBuilds: () => request('/pc-builder/builds'),
+  getPcBuild: (id) => request(`/pc-builder/builds/${id}`),
+  savePcBuild: (body) => request('/pc-builder/builds', { method: 'POST', body: JSON.stringify(body) }),
+  updatePcBuild: (id, body) => request(`/pc-builder/builds/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deletePcBuild: (id) => request(`/pc-builder/builds/${id}`, { method: 'DELETE' }),
+  trackPcBuildInTracker: (body) => request('/pc-builder/track', { method: 'POST', body: JSON.stringify(body) }),
 };

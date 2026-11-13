@@ -4,11 +4,11 @@ import Icon from '../components/Icon';
 import ThemeToggle from '../components/ThemeToggle';
 
 const FEATURES = [
+  { icon: 'cpu', title: 'Custom PC Builder', text: 'Build and configure full desktop rigs component-by-component with socket & DDR compatibility checks, wattage estimation, and dual-store deals.' },
   { icon: 'package', title: 'Track any product', text: 'Paste an Amazon.in or Flipkart link and we start recording its price.' },
   { icon: 'compare', title: 'Compare stores', text: 'Group the same item from both stores and see which one fluctuates more.' },
   { icon: 'chart', title: 'Price history', text: 'Charts and statistics (min, max, average, volatility) for every product.' },
   { icon: 'bell', title: 'Price alerts', text: 'Set a target price and get notified the moment it is reached.' },
-  { icon: 'clock', title: 'Automatic refresh', text: 'Prices are refreshed on a schedule, or on demand with one click.' },
   { icon: 'shield', title: 'Your own workspace', text: 'Each account has private products, groups and alerts, separate from everyone else.' },
 ];
 
@@ -82,15 +82,18 @@ export default function LandingPage() {
       <main>
         <section className="landing-hero">
           <div className="landing-hero-copy">
-            <span className="eyebrow">Amazon India · Flipkart</span>
-            <h1>Know when the price is right.</h1>
+            <span className="eyebrow">Amazon India · Flipkart · Custom PC Builder</span>
+            <h1>Smart Price Tracking & Custom PC Builder.</h1>
             <p className="lead">
-              Track product prices across Amazon and Flipkart, see how they change over time, and find out which store
-              really has the better deal.
+              Track product prices across Amazon and Flipkart, monitor automated price-drop alerts,
+              and build custom PC configurations with real-time hardware compatibility & wattage checks.
             </p>
             <div className="landing-cta">
               {user ? (
-                <Link to="/dashboard" className="btn btn-primary btn-lg">Open your dashboard</Link>
+                <>
+                  <Link to="/dashboard" className="btn btn-primary btn-lg">Open your dashboard</Link>
+                  <Link to="/pc-builder" className="btn btn-secondary btn-lg">Launch PC Builder</Link>
+                </>
               ) : (
                 <>
                   <Link to="/register" className="btn btn-primary btn-lg">Create free account</Link>

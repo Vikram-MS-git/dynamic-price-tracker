@@ -4,9 +4,11 @@ import { api } from '../api';
 import { useToast } from '../context/ToastContext';
 import { useApp } from '../context/AppContext';
 import { formatINR, formatPct, timeAgo } from '../lib/format';
+import { getBuySignal } from '../lib/insights';
 import Icon from './Icon';
 import Modal from './Modal';
 import PlatformBadge from './PlatformBadge';
+import DataSourceBadge from './DataSourceBadge';
 import ProductImage from './ProductImage';
 import Sparkline from './Sparkline';
 import { EmptyState, Skeleton } from './States';
@@ -27,12 +29,29 @@ function sparkTone(stats) {
   return stats.change < 0 ? 'good' : 'bad';
 }
 
-export default function ProductList({ products, totalCount, loading, insights, insightsLoading, hasFilters, onClearFilters, onChanged }) {
+export default function ProductList({ products, totalCount, loading, insights, insightsLoading, hasFilters, onClearFilters, onChanged, viewMode = 'table' }) {
   const toast = useToast();
   const { alerts, openTrack } = useApp();
   const [refreshingId, setRefreshingId] = useState(null);
+  const [simulatingId, setSimulatingId] = useState(null);
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  const handleSimulate = async (p) => {
+    setSimulatingId(p.id);
+    try {
+      const r = await api.simulatePrice(p.id);
+      toast.success(
+        `Updated price to ${formatINR(r.price)}${r.alertTriggered ? ' (TARGET ALERT TRIGGERED!)' : ''}.`,
+        'Price Updated'
+      );
+      onChanged?.();
+    } catch (err) {
+      toast.error(err.message || 'Unable to update price.');
+    } finally {
+      setSimulatingId(null);
+    }
+  };
 
   const handleRefresh = async (p) => {
     setRefreshingId(p.id);
@@ -73,8 +92,11 @@ export default function ProductList({ products, totalCount, loading, insights, i
           <Icon name="compare" size={16} />
         </Link>
       )}
-      <button type="button" className="icon-btn" title="Refresh price" aria-label={`Refresh price for ${p.name}`} disabled={refreshingId === p.id} onClick={() => handleRefresh(p)}>
+      <button type="button" className="icon-btn" title="Refresh live price (from store)" aria-label={`Refresh price for ${p.name}`} disabled={refreshingId === p.id} onClick={() => handleRefresh(p)}>
         <Icon name="refresh" size={16} className={refreshingId === p.id ? 'spin' : ''} />
+      </button>
+      <button type="button" className="icon-btn" title="Trigger real-time price update" aria-label={`Update price for ${p.name}`} disabled={simulatingId === p.id} onClick={() => handleSimulate(p)}>
+        <Icon name="sparkle" size={15} className={simulatingId === p.id ? 'spin' : ''} />
       </button>
       <a href={p.url} target="_blank" rel="noreferrer" className="icon-btn" title="Open on store" aria-label={`Open ${p.name} on the store`}>
         <Icon name="external" size={16} />
@@ -158,37 +180,137 @@ export default function ProductList({ products, totalCount, loading, insights, i
 
   return (
     <>
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Store</th>
-              <th className="num">Price</th>
-              <th className="num">Change</th>
-              <th>Trend</th>
-              <th>Updated</th>
-              <th className="actions-col"><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((p) => {
-              const s = insights[p.id];
-              return (
-                <tr key={p.id}>
-                  <td>{nameCell(p)}</td>
-                  <td><PlatformBadge platform={p.platform} /></td>
-                  <td className="num price">{p.latest_price != null ? formatINR(p.latest_price) : <span className="muted">Pending</span>}</td>
-                  <td className="num">{insightsLoading && !s ? <Skeleton style={{ height: 14, width: 48, marginLeft: 'auto' }} /> : <Change stats={s} />}</td>
-                  <td>{insightsLoading && !s ? <Skeleton style={{ height: 22, width: 90 }} /> : <Sparkline values={s?.series} tone={sparkTone(s)} />}</td>
-                  <td className="muted nowrap">{timeAgo(p.last_scraped_at)}</td>
-                  <td className="actions-col">{actions(p)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {viewMode === 'table' ? (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Store</th>
+                <th className="num">Price</th>
+                <th className="num">Change</th>
+                <th>Trend</th>
+                <th>Buy Signal</th>
+                <th>Updated</th>
+                <th className="actions-col"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((p) => {
+                const s = insights[p.id];
+                const signal = getBuySignal(p, s, alerts[p.id]);
+                return (
+                  <tr key={p.id}>
+                    <td>{nameCell(p)}</td>
+                    <td><PlatformBadge platform={p.platform} /></td>
+                    <td className="num price">
+                      {p.latest_price != null ? (
+                        <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                          <span>{formatINR(p.latest_price)}</span>
+                          <DataSourceBadge isSimulated={p.latest_is_simulated} size="sm" />
+                        </div>
+                      ) : (
+                        <span className="muted">Pending</span>
+                      )}
+                    </td>
+                    <td className="num">{insightsLoading && !s ? <Skeleton style={{ height: 14, width: 48, marginLeft: 'auto' }} /> : <Change stats={s} />}</td>
+                    <td>{insightsLoading && !s ? <Skeleton style={{ height: 22, width: 90 }} /> : <Sparkline values={s?.series} tone={sparkTone(s)} />}</td>
+                    <td>
+                      <span className={`pill ${signal.tone === 'good' ? 'pill-good' : signal.tone === 'bad' ? 'pill-bad' : 'pill'}`} title={signal.advice}>
+                        <Icon name="sparkle" size={11} /> {signal.shortLabel}
+                      </span>
+                    </td>
+                    <td className="muted nowrap">{timeAgo(p.last_scraped_at)}</td>
+                    <td className="actions-col">{actions(p)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="product-grid-view">
+          {products.map((p) => {
+            const s = insights[p.id];
+            const signal = getBuySignal(p, s, alerts[p.id]);
+            const target = alerts[p.id]?.target;
+            const reached = target != null && p.latest_price != null && Number(p.latest_price) <= target;
+
+            return (
+              <div key={p.id} className={`product-card ${reached ? 'card-target-reached' : ''}`}>
+                <div className="product-card-top">
+                  <PlatformBadge platform={p.platform} />
+                  <span className={`pill ${signal.tone === 'good' ? 'pill-good' : signal.tone === 'bad' ? 'pill-bad' : 'pill'}`} title={signal.advice}>
+                    <Icon name="sparkle" size={11} /> {signal.shortLabel}
+                  </span>
+                </div>
+
+                <div className="product-card-img-wrap">
+                  <Link to={`/products/${p.id}`}>
+                    <ProductImage src={p.image_url} alt={p.name} platform={p.platform} size="xl" />
+                  </Link>
+                </div>
+
+                <div className="product-card-body">
+                  <span className="product-card-cat">{p.category || 'Product'}</span>
+                  <Link to={`/products/${p.id}`} className="product-card-title" title={p.name}>
+                    {p.name}
+                  </Link>
+
+                  <div className="product-card-price-row">
+                    <div>
+                      <span className="product-card-price">
+                        {p.latest_price != null ? formatINR(p.latest_price) : 'Pending'}
+                      </span>
+                      <DataSourceBadge isSimulated={p.latest_is_simulated} size="sm" />
+                    </div>
+                    <Change stats={s} />
+                  </div>
+
+                  {target != null && (
+                    <div className="product-card-target-row">
+                      <span className="text-xs muted">Alert Target: ₹{Number(target).toLocaleString('en-IN')}</span>
+                      {reached && <span className="badge badge-good text-xs">Target Met!</span>}
+                    </div>
+                  )}
+
+                  <div className="product-card-sparkline">
+                    <span className="text-xs muted">14-Day Movement</span>
+                    <Sparkline values={s?.series} tone={sparkTone(s)} width={120} height={26} />
+                  </div>
+                </div>
+
+                <div className="product-card-actions">
+                  <Link to={`/products/${p.id}`} className="btn btn-secondary btn-sm" title="Price History & Analytics">
+                    <Icon name="chart" size={14} /> Analytics
+                  </Link>
+                  {p.group_id && (
+                    <Link to={`/compare?group=${p.group_id}`} className="btn btn-secondary btn-sm" title="Compare Stores">
+                      <Icon name="compare" size={14} /> Compare
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    title="Simulate Market Price Drop"
+                    disabled={simulatingId === p.id}
+                    onClick={() => handleSimulate(p)}
+                  >
+                    <Icon name="sparkle" size={13} className={simulatingId === p.id ? 'spin' : ''} />
+                    {simulatingId === p.id ? 'Dropping…' : 'Drop Test'}
+                  </button>
+                  <a href={p.url} target="_blank" rel="noreferrer" className="icon-btn" title="Open Store">
+                    <Icon name="external" size={15} />
+                  </a>
+                  <button type="button" className="icon-btn danger" title="Delete" onClick={() => setToDelete(p)}>
+                    <Icon name="trash" size={15} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <ul className="card-list">
         {products.map((p) => {
@@ -199,7 +321,12 @@ export default function ProductList({ products, totalCount, loading, insights, i
               <div className="mcard-stats">
                 <div>
                   <span className="muted">Price</span>
-                  <strong className="price">{p.latest_price != null ? formatINR(p.latest_price) : 'Pending'}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <strong className="price">{p.latest_price != null ? formatINR(p.latest_price) : 'Pending'}</strong>
+                    {p.latest_price != null && (
+                      <DataSourceBadge isSimulated={p.latest_is_simulated} size="sm" />
+                    )}
+                  </div>
                 </div>
                 <div>
                   <span className="muted">Change</span>

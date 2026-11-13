@@ -55,7 +55,7 @@ export async function compareGroup(userId, groupId, dateRange = {}) {
   const group = await groupModel.getGroupById(groupId, userId);
   if (!group) return null;
 
-  const products = await groupModel.getProductsInGroup(groupId);
+  const products = await groupModel.getProductsInGroup(groupId, userId);
   if (!products.length) {
     return { group, series: [], stats: [] };
   }
@@ -69,6 +69,8 @@ export async function compareGroup(userId, groupId, dateRange = {}) {
       .map((row) => ({
         scraped_at: row.scraped_at,
         price: Number(row.price),
+        is_simulated: Boolean(row.is_simulated),
+        simulation_label: row.simulation_label,
       }));
 
     return {
@@ -82,17 +84,31 @@ export async function compareGroup(userId, groupId, dateRange = {}) {
   const stats = series.map((s) => ({
     platform: s.platform,
     productId: s.productId,
+    name: s.name,
     ...computeStats(s.points),
   }));
 
   return { group, series, stats };
 }
 
+export async function updateGroup(userId, groupId, data) {
+  const group = await groupModel.getGroupById(groupId, userId);
+  if (!group) return null;
+  return groupModel.updateGroup(groupId, userId, data);
+}
+
+export async function removeGroup(userId, groupId) {
+  const group = await groupModel.getGroupById(groupId, userId);
+  if (!group) return null;
+  return groupModel.deleteGroup(groupId, userId);
+}
+
 export async function assignProductToGroup(userId, productId, groupId) {
   const [product, group] = await Promise.all([
     productModel.getProductById(productId, userId),
-    groupModel.getGroupById(groupId, userId),
+    groupId ? groupModel.getGroupById(groupId, userId) : Promise.resolve(null),
   ]);
-  if (!product || !group) return null;
-  return productModel.updateProductGroup(productId, groupId);
+  if (!product) return null;
+  if (groupId && !group) return null;
+  return productModel.updateProductGroup(productId, groupId ?? null);
 }

@@ -89,3 +89,66 @@ export function computeKpis(products, insights, alerts) {
     failed: products.filter((p) => p.last_scrape_error).length,
   };
 }
+
+export function getBuySignal(product, insight, targetAlert) {
+  if (!product || product.latest_price == null) {
+    return { type: 'neutral', label: 'MONITORING', shortLabel: 'Tracking', tone: 'neutral', score: 50, advice: 'Gathering price history.' };
+  }
+  const current = Number(product.latest_price);
+  const target = targetAlert ? Number(targetAlert.target) : null;
+
+  if (target != null && current <= target) {
+    return {
+      type: 'target_reached',
+      label: 'TARGET MET · STRONG BUY',
+      shortLabel: 'Target Met',
+      tone: 'good',
+      score: 99,
+      advice: `Price is ₹${(target - current).toLocaleString('en-IN')} below your alert target!`,
+    };
+  }
+
+  const s = insight;
+  if (!s || !s.min || !s.max) {
+    return {
+      type: 'stable',
+      label: 'STABLE PRICE',
+      shortLabel: 'Stable',
+      tone: 'neutral',
+      score: 70,
+      advice: 'Price has remained consistent over recent scrapes.',
+    };
+  }
+
+  if (current <= s.min * 1.02 || (s.pctChange != null && s.pctChange <= -5)) {
+    const diff = s.max > current ? s.max - current : 0;
+    return {
+      type: 'strong_buy',
+      label: 'STRONG BUY · DISCOUNTED',
+      shortLabel: 'Great Deal',
+      tone: 'good',
+      score: 94,
+      advice: diff > 0 ? `Near 30-day low! Save ₹${diff.toLocaleString('en-IN')} vs 30d peak.` : 'Substantial market discount detected!',
+    };
+  }
+
+  if (current >= s.max * 0.97 && s.max > s.min * 1.06) {
+    return {
+      type: 'wait',
+      label: 'WAIT · HIGH PRICE',
+      shortLabel: 'Wait to Buy',
+      tone: 'bad',
+      score: 40,
+      advice: 'Current price is near 30-day peak. Historical price dips are likely.',
+    };
+  }
+
+  return {
+    type: 'fair',
+    label: 'FAIR MARKET VALUE',
+    shortLabel: 'Fair Value',
+    tone: 'neutral',
+    score: 75,
+    advice: 'Priced within normal market average corridor.',
+  };
+}

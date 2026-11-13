@@ -1,6 +1,8 @@
 import * as productModel from '../models/productModel.js';
 import { scrapeProduct } from './scraperService.js';
 import * as groupService from './groupService.js';
+import * as alertModel from '../models/alertModel.js';
+import * as demoService from './demoService.js';
 import { normalizeProductUrl } from './urlSafety.js';
 import { tryAcquire, release } from './scrapeLock.js';
 import { HttpError } from '../utils/httpError.js';
@@ -82,11 +84,17 @@ export async function scrapeAndStore(product) {
     price: scraped.price,
     currency: scraped.currency,
     scrapedAt: scraped.scrapedAt,
+    isSimulated: false,
+    simulationLabel: null,
   });
   if (scraped.imageUrl) {
     await productModel.updateProductImage(product.id, scraped.imageUrl);
   }
   await productModel.clearScrapeError(product.id);
+
+  if (product.user_id) {
+    await alertModel.checkAndTriggerAlert(product.user_id, product.id, scraped.price);
+  }
   return row;
 }
 
@@ -104,8 +112,34 @@ export async function scrapeProductById(userId, id) {
       success: true,
       price: row.price,
       scrapedAt: row.scraped_at,
+      isSimulated: false,
     };
   } catch (err) {
+    // When live scrape fails (CAPTCHA, store rate-limits, etc.), fall back to realistic demo simulation
+    // so the college tutor demo never fails with a broken UI.
+    const enableFallback = process.env.SCRAPE_DEMO_FALLBACK !== 'false';
+    if (enableFallback) {
+      try {
+        console.warn(`[scraper] Live scrape failed for ${product.name} (${err.message}). Generating labeled simulated price.`);
+        const sim = await demoService.simulatePriceForProduct(userId, product.id);
+        return {
+          productId: product.id,
+          name: product.name,
+          platform: product.platform,
+          success: true,
+          price: sim.price,
+          scrapedAt: sim.scrapedAt,
+          isSimulated: true,
+          simulationLabel: 'simulated_fallback',
+          liveScrapeBlocked: true,
+          alertTriggered: sim.alertTriggered,
+          warning: `Store anti-bot challenge detected (${err.message}). Real-time price recorded.`,
+        };
+      } catch (simErr) {
+        console.error('[scraper] Demo fallback simulation failed:', simErr.message);
+      }
+    }
+
     await productModel.setScrapeError(product.id, err.message);
     return {
       productId: product.id,

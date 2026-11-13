@@ -36,7 +36,9 @@ export async function getAllGroups(userId) {
                   'category', p.category,
                   'image_url', p.image_url,
                   'latest_price', lp.price,
-                  'last_scraped_at', lp.scraped_at
+                  'last_scraped_at', lp.scraped_at,
+                  'is_simulated', lp.is_simulated,
+                  'simulation_label', lp.simulation_label
                 )
                 ORDER BY p.platform
               ) FILTER (WHERE p.id IS NOT NULL),
@@ -45,7 +47,7 @@ export async function getAllGroups(userId) {
      FROM product_groups g
      LEFT JOIN products p ON p.group_id = g.id AND p.user_id = g.user_id
      LEFT JOIN LATERAL (
-       SELECT price, scraped_at
+       SELECT price, scraped_at, is_simulated, simulation_label
        FROM price_history
        WHERE product_id = p.id
        ORDER BY scraped_at DESC
@@ -59,12 +61,27 @@ export async function getAllGroups(userId) {
   return result.rows;
 }
 
-export async function getProductsInGroup(groupId) {
-  const result = await query(
-    `SELECT * FROM products WHERE group_id = $1 ORDER BY platform`,
-    [groupId]
-  );
+export async function getProductsInGroup(groupId, userId) {
+  const result = userId
+    ? await query(`SELECT * FROM products WHERE group_id = $1 AND user_id = $2 ORDER BY platform`, [groupId, userId])
+    : await query(`SELECT * FROM products WHERE group_id = $1 ORDER BY platform`, [groupId]);
   return result.rows;
+}
+
+export async function updateGroup(id, userId, { name, category }) {
+  const result = await query(
+    `UPDATE product_groups SET name = COALESCE($3, name), category = COALESCE($4, category)
+     WHERE id = $1 AND user_id = $2 RETURNING *`,
+    [id, userId, name ?? null, category ?? null]
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function deleteGroup(id, userId) {
+  // Sets group_id to null on products first, then deletes group
+  await query(`UPDATE products SET group_id = NULL WHERE group_id = $1 AND user_id = $2`, [id, userId]);
+  const result = await query(`DELETE FROM product_groups WHERE id = $1 AND user_id = $2 RETURNING id`, [id, userId]);
+  return result.rows[0] ?? null;
 }
 
 export async function getPriceHistoryForProducts(productIds, { from, to } = {}) {
@@ -84,7 +101,7 @@ export async function getPriceHistoryForProducts(productIds, { from, to } = {}) 
   }
 
   const result = await query(
-    `SELECT id, product_id, price, currency, scraped_at
+    `SELECT id, product_id, price, currency, scraped_at, is_simulated, simulation_label
      FROM price_history
      WHERE ${conditions.join(' AND ')}
      ORDER BY scraped_at ASC`,

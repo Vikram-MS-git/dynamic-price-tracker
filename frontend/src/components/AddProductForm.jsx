@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../api';
 import Icon from './Icon';
 
@@ -31,8 +31,13 @@ const EMPTY = { name: '', url: '', platform: 'amazon', category: '', groupName: 
 
 export default function AddProductForm({ onAdded, onCancel }) {
   const [form, setForm] = useState(EMPTY);
+  const [existingGroups, setExistingGroups] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.getGroups().then((data) => setExistingGroups(data || [])).catch(() => {});
+  }, []);
 
   const detectedPlatform = detectPlatform(form.url);
 
@@ -119,8 +124,19 @@ export default function AddProductForm({ onAdded, onCancel }) {
       <div className="form-row">
         <label className="field">
           <span className="field-label">Group name</span>
-          <input name="groupName" value={form.groupName} onChange={handleChange} placeholder="Same on Amazon + Flipkart" />
-          <span className="field-hint">Use the same group to compare stores.</span>
+          <input
+            name="groupName"
+            list="existing-groups"
+            value={form.groupName}
+            onChange={handleChange}
+            placeholder="Pick existing or type new"
+          />
+          <datalist id="existing-groups">
+            {existingGroups.map((g) => (
+              <option key={g.id} value={g.name} />
+            ))}
+          </datalist>
+          <span className="field-hint">Use the same group to compare stores (RQ1).</span>
         </label>
         <label className="field">
           <span className="field-label">Category</span>

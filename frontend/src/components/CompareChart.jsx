@@ -32,6 +32,7 @@ function buildChartData(series) {
         byTime.set(key, { timeKey: key, time: formatDate(point.scraped_at) });
       }
       byTime.get(key)[s.platform] = point.price;
+      byTime.get(key)[`${s.platform}_simulated`] = point.is_simulated;
     }
   }
 
@@ -46,8 +47,8 @@ function CustomTooltip({ active, payload, label }) {
     <div className="chart-tooltip">
       <p className="chart-tooltip-time">{label}</p>
       {payload.map((entry) => (
-        <p key={entry.dataKey} style={{ color: entry.color }}>
-          {entry.name}: ₹{Number(entry.value).toLocaleString('en-IN')}
+        <p key={entry.dataKey} style={{ color: entry.color, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>{entry.name}: ₹{Number(entry.value).toLocaleString('en-IN')}</span>
         </p>
       ))}
     </div>

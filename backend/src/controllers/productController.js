@@ -1,4 +1,5 @@
 import * as productService from '../services/productService.js';
+import * as demoService from '../services/demoService.js';
 import { runScrapeJob } from '../jobs/scheduler.js';
 
 export async function createProduct(req, res, next) {
@@ -10,9 +11,17 @@ export async function createProduct(req, res, next) {
     const product = await productService.addProduct(req.user.id, req.body);
     res.status(201).json(product);
     if (process.env.NODE_ENV !== 'test') {
-      productService.scrapeProductById(req.user.id, product.id).catch((err) => {
-        console.warn(`[create] Background scrape for product ${product.id}:`, err.message);
-      });
+      productService.scrapeProductById(req.user.id, product.id)
+        .catch((err) => {
+          console.warn(`[create] Background scrape for product ${product.id}:`, err.message);
+        })
+        .finally(async () => {
+          try {
+            await demoService.generatePriceHistoryForProduct(req.user.id, product.id, 14, 16);
+          } catch (e) {
+            console.warn(`[create] Auto-history for product ${product.id}:`, e.message);
+          }
+        });
     }
   } catch (err) {
     next(err);
@@ -76,6 +85,36 @@ export async function scrapeOne(req, res, next) {
     }
     const result = await productService.scrapeProductById(req.user.id, id);
     if (!result) return res.status(404).json({ error: 'Product not found' });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function simulateOne(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid product id' });
+    }
+    const { forceDrop, dropPercent } = req.body ?? {};
+    const result = await demoService.simulatePriceForProduct(req.user.id, id, {
+      forceDrop: Boolean(forceDrop),
+      dropPercent: dropPercent ? Number(dropPercent) : 10,
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function simulateHistory(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid product id' });
+    }
+    const result = await demoService.generatePriceHistoryForProduct(req.user.id, id);
     res.json(result);
   } catch (err) {
     next(err);

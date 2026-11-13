@@ -26,6 +26,8 @@ router.post('/scrape-all', scrapeAllLimiter, productController.scrapeAll);
 router.get('/:id', productController.getProduct);
 router.get('/:id/prices', productController.getProductPrices);
 router.post('/:id/scrape', scrapeOneLimiter, productController.scrapeOne);
+router.post('/:id/simulate', productController.simulateOne);
+router.post('/:id/simulate-history', productController.simulateHistory);
 router.delete('/:id', productController.deleteProduct);
 
 export default router;
