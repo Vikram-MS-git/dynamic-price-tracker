@@ -9,9 +9,11 @@ export async function createProduct(req, res, next) {
     }
     const product = await productService.addProduct(req.user.id, req.body);
     res.status(201).json(product);
-    productService.scrapeProductById(req.user.id, product.id).catch((err) => {
-      console.warn(`[create] Background scrape for product ${product.id}:`, err.message);
-    });
+    if (process.env.NODE_ENV !== 'test') {
+      productService.scrapeProductById(req.user.id, product.id).catch((err) => {
+        console.warn(`[create] Background scrape for product ${product.id}:`, err.message);
+      });
+    }
   } catch (err) {
     next(err);
   }

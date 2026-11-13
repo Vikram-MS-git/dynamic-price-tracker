@@ -3,6 +3,9 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import pool from '../config/db.js';
 import * as userModel from '../models/userModel.js';
+import { HttpError } from '../utils/httpError.js';
+
+export { HttpError };
 
 const TOKEN_TTL = process.env.JWT_EXPIRES_IN || '7d';
 const BCRYPT_ROUNDS = 10;
@@ -27,14 +30,6 @@ function getSecret() {
 
 // Used so a login for an unknown email takes as long as one for a known email.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', BCRYPT_ROUNDS);
-
-export class HttpError extends Error {
-  constructor(status, message, details) {
-    super(message);
-    this.status = status;
-    this.details = details;
-  }
-}
 
 export function normalizeEmail(email) {
   return String(email ?? '').trim().toLowerCase();
@@ -65,13 +60,15 @@ function failIfInvalid(errors) {
 }
 
 export function signToken(user) {
-  return jwt.sign({ sub: user.id }, getSecret(), { expiresIn: TOKEN_TTL });
+  // `tv` = token version; changing the password bumps it and revokes older tokens.
+  return jwt.sign({ sub: user.id, tv: user.token_version ?? 0 }, getSecret(), { expiresIn: TOKEN_TTL });
 }
 
+/** @returns {{ id: number, tv: number } | null} */
 export function verifyToken(token) {
   try {
     const payload = jwt.verify(token, getSecret());
-    return Number(payload.sub);
+    return { id: Number(payload.sub), tv: Number(payload.tv ?? 0) };
   } catch {
     return null;
   }
@@ -97,7 +94,7 @@ export async function register({ name, email, password }) {
     const { rows } = await client.query(
       `INSERT INTO users (name, email, password_hash)
        VALUES ($1, $2, $3)
-       RETURNING id, name, email, created_at`,
+       RETURNING id, name, email, created_at, token_version`,
       [String(name).trim(), cleanEmail, passwordHash]
     );
     const user = rows[0];
@@ -109,7 +106,8 @@ export async function register({ name, email, password }) {
     }
 
     await client.query('COMMIT');
-    return { user, token: signToken(user) };
+    const { token_version: tv, ...publicUser } = user;
+    return { user: publicUser, token: signToken({ ...publicUser, token_version: tv }) };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     throw err;
@@ -127,7 +125,7 @@ export async function login({ email, password }) {
   if (!row || !ok) throw new HttpError(401, 'Invalid email or password');
 
   const user = { id: row.id, name: row.name, email: row.email, created_at: row.created_at };
-  return { user, token: signToken(user) };
+  return { user, token: signToken({ ...user, token_version: row.token_version }) };
 }
 
 export async function getProfile(userId) {
@@ -155,5 +153,7 @@ export async function changePassword(userId, { currentPassword, newPassword }) {
   const ok = await bcrypt.compare(String(currentPassword ?? ''), row.password_hash);
   if (!ok) throw new HttpError(400, 'Current password is incorrect');
 
-  await userModel.setPasswordHash(userId, await bcrypt.hash(newPassword, BCRYPT_ROUNDS));
+  const tokenVersion = await userModel.setPasswordHash(userId, await bcrypt.hash(newPassword, BCRYPT_ROUNDS));
+  // Every other session is now logged out; give THIS session a fresh token so it stays signed in.
+  return signToken({ id: userId, token_version: tokenVersion });
 }

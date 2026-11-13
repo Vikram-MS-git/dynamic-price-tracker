@@ -1,11 +1,16 @@
 import { query } from '../config/db.js';
 
-export async function createProduct({ name, url, platform, category, groupId, userId }) {
+export async function findByProductKey(userId, productKey) {
+  const r = await query(`SELECT id, name FROM products WHERE user_id = $1 AND product_key = $2 LIMIT 1`, [userId, productKey]);
+  return r.rows[0] ?? null;
+}
+
+export async function createProduct({ name, url, platform, category, groupId, userId, productKey }) {
   const result = await query(
-    `INSERT INTO products (name, url, platform, category, group_id, user_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO products (name, url, platform, category, group_id, user_id, product_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [name, url, platform, category ?? null, groupId ?? null, userId]
+    [name, url, platform, category ?? null, groupId ?? null, userId, productKey]
   );
   return result.rows[0];
 }

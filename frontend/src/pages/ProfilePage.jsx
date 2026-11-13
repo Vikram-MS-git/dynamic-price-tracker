@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api, tokenStore } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Avatar from '../components/Avatar';
@@ -92,9 +92,11 @@ function PasswordForm() {
     setSaving(true);
     setError('');
     try {
-      await api.changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword });
+      const res = await api.changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword });
+      // The server signs out every other session; this one gets a fresh token and stays logged in.
+      if (res.token) tokenStore.set(res.token);
       setForm(empty);
-      toast.success('Use your new password next time you log in.', 'Password changed');
+      toast.success('Other devices were signed out. Use your new password next time you log in.', 'Password changed');
     } catch (err) {
       setError(err.message);
     } finally {

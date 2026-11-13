@@ -20,6 +20,7 @@ Stack: **Neon** (PostgreSQL) + **Railway** or **Render** (API) + **Vercel** (fro
 | `DATABASE_URL` | Neon connection string |
 | `JWT_SECRET` | Long random string (required). `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` |
 | `NODE_ENV` | `production` |
+| `CORS_ORIGINS` | Your Vercel frontend URL, e.g. `https://your-app.vercel.app` |
 | `PORT` | `3001` (Railway sets `PORT` automatically — use `${{PORT}}` or leave unset) |
 | `SCRAPE_CRON` | `0 */6 * * *` |
 | `SCRAPE_USER_AGENT` | Browser user-agent string |

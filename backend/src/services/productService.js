@@ -1,26 +1,36 @@
 import * as productModel from '../models/productModel.js';
 import { scrapeProduct } from './scraperService.js';
 import * as groupService from './groupService.js';
+import { normalizeProductUrl } from './urlSafety.js';
+import { tryAcquire, release } from './scrapeLock.js';
+import { HttpError } from '../utils/httpError.js';
 
 const VALID_PLATFORMS = ['amazon', 'flipkart'];
 
-export function validateProductInput({ name, url, platform, category }) {
+/** Returns a list of problems (empty = valid). The URL is checked by the SSRF guard. */
+export function validateProductInput({ name, url, platform, category, groupName }) {
   const errors = [];
-  if (!name?.trim()) errors.push('name is required');
-  if (!url?.trim()) errors.push('url is required');
-  if (!platform?.trim()) errors.push('platform is required');
-  else if (!VALID_PLATFORMS.includes(platform.toLowerCase())) {
+  if (!String(name ?? '').trim()) errors.push('Product name is required');
+  else if (String(name).trim().length > 255) errors.push('Product name must be 255 characters or fewer');
+  if (category != null && String(category).trim().length > 100) errors.push('Category must be 100 characters or fewer');
+  if (groupName != null && String(groupName).trim().length > 255) errors.push('Group name must be 255 characters or fewer');
+  if (platform && !VALID_PLATFORMS.includes(String(platform).toLowerCase())) {
     errors.push(`platform must be one of: ${VALID_PLATFORMS.join(', ')}`);
   }
   try {
-    new URL(url);
-  } catch {
-    errors.push('url must be a valid URL');
+    normalizeProductUrl(url, platform);
+  } catch (err) {
+    errors.push(err.message);
   }
   return errors;
 }
 
 export async function addProduct(userId, data) {
+  // Canonical URL + identity key: strips tracking params and lets us refuse duplicates.
+  const { url, platform, productKey } = normalizeProductUrl(data.url, data.platform);
+  const existing = await productModel.findByProductKey(userId, productKey);
+  if (existing) throw new HttpError(409, `You are already tracking this product ("${existing.name}")`);
+
   const group = await groupService.resolveGroupForProduct({
     userId,
     groupId: data.groupId ? Number(data.groupId) : undefined,
@@ -29,14 +39,21 @@ export async function addProduct(userId, data) {
     category: data.category,
   });
 
-  return productModel.createProduct({
-    name: data.name.trim(),
-    url: data.url.trim(),
-    platform: data.platform.toLowerCase(),
-    category: data.category?.trim() || null,
-    groupId: group.id,
-    userId,
-  });
+  try {
+    return await productModel.createProduct({
+      name: data.name.trim(),
+      url,
+      platform,
+      category: data.category?.trim() || null,
+      groupId: group.id,
+      userId,
+      productKey,
+    });
+  } catch (err) {
+    // Two simultaneous adds of the same product: the unique index catches the loser.
+    if (err.code === '23505') throw new HttpError(409, 'You are already tracking this product');
+    throw err;
+  }
 }
 
 export async function removeProduct(userId, id) {
@@ -76,6 +93,8 @@ export async function scrapeAndStore(product) {
 export async function scrapeProductById(userId, id) {
   const product = await productModel.getProductById(id, userId);
   if (!product) return null;
+  const lockKey = `product:${product.id}`;
+  if (!tryAcquire(lockKey)) throw new HttpError(409, 'This product is already being refreshed');
   try {
     const row = await scrapeAndStore(product);
     return {
@@ -95,5 +114,7 @@ export async function scrapeProductById(userId, id) {
       success: false,
       error: err.message,
     };
+  } finally {
+    release(lockKey);
   }
 }

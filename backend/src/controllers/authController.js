@@ -39,8 +39,8 @@ export async function updateMe(req, res, next) {
 
 export async function changePassword(req, res, next) {
   try {
-    await authService.changePassword(req.user.id, req.body ?? {});
-    res.json({ message: 'Password updated' });
+    const token = await authService.changePassword(req.user.id, req.body ?? {});
+    res.json({ message: 'Password updated', token });
   } catch (err) {
     next(err);
   }
