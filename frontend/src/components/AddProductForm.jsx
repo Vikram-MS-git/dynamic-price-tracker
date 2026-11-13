@@ -7,13 +7,20 @@ const PLATFORMS = [
   { id: 'flipkart', label: 'Flipkart' },
 ];
 
+// Mirrors the server's allowlist (backend/src/services/urlSafety.js). The server is the real gatekeeper.
+const AMAZON_HOSTS = ['amazon.in', 'amazon.com'];
+const AMAZON_SHORT = ['amzn.in', 'amzn.to', 'a.co'];
+const FLIPKART_HOSTS = ['flipkart.com'];
+const FLIPKART_SHORT = ['fkrt.it'];
+const inDomain = (host, d) => host === d || host.endsWith(`.${d}`);
+
 function detectPlatform(url) {
   try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    if (hostname === 'amazon.in' || hostname.endsWith('.amazon.in') || hostname === 'www.amazon.com' || hostname.endsWith('.amazon.com')) {
-      return 'amazon';
-    }
-    if (hostname === 'flipkart.com' || hostname.endsWith('.flipkart.com')) return 'flipkart';
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return null;
+    const hostname = u.hostname.toLowerCase().replace(/\.$/, '');
+    if (AMAZON_HOSTS.some((d) => inDomain(hostname, d)) || AMAZON_SHORT.includes(hostname)) return 'amazon';
+    if (FLIPKART_HOSTS.some((d) => inDomain(hostname, d)) || FLIPKART_SHORT.includes(hostname)) return 'flipkart';
     return null;
   } catch {
     return null;
@@ -45,7 +52,7 @@ export default function AddProductForm({ onAdded, onCancel }) {
     const detected = detectPlatform(form.url);
 
     if (!detected) {
-      setError('Enter a supported Amazon India (.amazon.in) or Flipkart (.flipkart.com) product URL.');
+      setError('Enter an https:// product link from Amazon (amazon.in / amazon.com) or Flipkart (flipkart.com).');
       return;
     }
     if (form.platform !== detected) {

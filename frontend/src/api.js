@@ -46,7 +46,9 @@ async function request(path, options = {}) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401 && auth && token) onUnauthorized?.();
-    const msg = data.error || data.details?.join?.(', ') || res.statusText;
+    // Prefer the specific reasons (e.g. which field is wrong) over a generic "Validation failed".
+    const details = Array.isArray(data.details) ? data.details.filter(Boolean) : [];
+    const msg = details.length ? details.join(' ') : data.error || res.statusText;
     throw new Error(msg);
   }
   return data;

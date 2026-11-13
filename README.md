@@ -127,6 +127,12 @@ Everything except `/health`, `POST /auth/register` and `POST /auth/login` requir
 
 Sample SQL for your report: [docs/SAMPLE_QUERIES.sql](docs/SAMPLE_QUERIES.sql)
 
+## Supported product links
+
+Only `https://` links on these stores are accepted: **Amazon** (`amazon.in`, `amazon.com`, short links `amzn.in` / `amzn.to` / `a.co`) and **Flipkart** (`flipkart.com`, short links `dl.flipkart.com` / `fkrt.it`). The link must be a product page (Amazon `/dp/XXXXXXXXXX`, Flipkart `/p/itm…`), not a search or category page.
+
+Links are cleaned (tracking parameters removed) and the same product cannot be tracked twice by one user. Anything else (other websites, `http://`, `localhost`, private/internal addresses, `file://`) is refused. This is the SSRF protection: the server re-checks the address on every redirect and on every connection.
+
 ## Scraper (cheerio + Puppeteer)
 
 - First attempt: fast HTML parse (`priceExtractor.js`).
@@ -134,7 +140,36 @@ Sample SQL for your report: [docs/SAMPLE_QUERIES.sql](docs/SAMPLE_QUERIES.sql)
 - Always Puppeteer: `SCRAPE_USE_PUPPETEER=true` (slower).
 - After changing `.env`, restart the backend.
 - Failed scrapes store `last_scrape_error` on the product row.
+- The scraper reads the **selling price** (what you pay), never the struck-through MRP, and prefers failing with a clear error over guessing. Store pages change often, so **verify on your machine** (needs internet):
+  ```bash
+  cd backend
+  npm run scrape:check -- "https://www.amazon.in/dp/XXXXXXXXXX"
+  ```
+  It prints the price and image it read. Compare the price with your browser. If it is wrong or missing, send me the output.
+- "Refresh all" and the cron job pause `SCRAPE_DELAY_MS` between products, and only one refresh can run at a time.
 - For viva: **`npm run seed:demo`** as backup; mention ethical/ToS limits in your report.
+
+## Database migrations
+
+`npm run migrate` applies each migration once and records it in `schema_migrations`, so it is safe to run again at any time. Migrations only add to the schema and keep your data. If your database already contained the same product more than once for one user, migration 006 leaves those extra rows untouched and lists them in the console so you can delete them in the app.
+
+## Testing
+
+```bash
+cd backend
+npm test
+```
+
+Runs the unit tests (URL safety / SSRF, price parsing against sample HTML). The API integration tests (login, per-user isolation, duplicates, password change, migrations) need a **separate, disposable** database because they wipe its tables:
+
+```bash
+# one time, in psql or pgAdmin:  CREATE DATABASE price_tracker_test;
+# Windows (cmd):
+set TEST_DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/price_tracker_test
+npm test
+```
+
+Without `TEST_DATABASE_URL` those tests are skipped. They refuse to run unless the database name contains `test`. The price-parsing tests use hand-written sample pages, so they prove the logic but not that Amazon/Flipkart still use the same markup (use `npm run scrape:check` for that).
 
 ## Deployment
 
@@ -150,6 +185,10 @@ Production frontend: set `VITE_API_URL` to your API URL (see `frontend/.env.exam
 | `DATABASE_URL` | — | PostgreSQL connection string |
 | `JWT_SECRET` | — (required in production) | Signs login tokens |
 | `JWT_EXPIRES_IN` | `7d` | Login lifetime |
+| `CORS_ORIGINS` | any (dev) | Production: your frontend URL(s), comma separated |
+| `SCRAPE_DELAY_MS` | `1500` | Pause between products when refreshing many |
+| `SCRAPE_TIMEOUT_MS` | `90000` | Give up on one product after this long |
+| `TEST_DATABASE_URL` | — | Disposable DB for `npm test` (name must contain `test`) |
 | `SCRAPE_CRON` | `0 */6 * * *` | Cron schedule |
 | `SCRAPE_USER_AGENT` | browser UA | HTTP header for scraper |
 | `VITE_API_URL` | `/api` (dev proxy) | Frontend API base URL |
