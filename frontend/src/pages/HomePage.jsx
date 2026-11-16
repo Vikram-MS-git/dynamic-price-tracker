@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { usePriceInsights } from '../hooks/usePriceInsights';
 import { computeKpis } from '../lib/insights';
 import { formatINR, timeAgo } from '../lib/format';
+import { computeProductPrediction, getPredictionBadge } from '../lib/predictions';
 import DashboardStats from '../components/DashboardStats';
 import DashboardCharts from '../components/DashboardCharts';
 import ProductList from '../components/ProductList';
@@ -80,6 +81,32 @@ export default function HomePage() {
     });
     return top;
   }, [products, insights]);
+
+  // AI Price Movement Radar: upcoming forecasted opportunities
+  const radarOpportunities = useMemo(() => {
+    if (!products.length) return [];
+    const list = products.map((p) => {
+      const pred = computeProductPrediction(p, insights[p.id]?.history || [], alerts[p.id]?.target);
+      const badge = getPredictionBadge(pred);
+      return { product: p, prediction: pred, badge };
+    });
+
+    // Pick products with projected price drops, target reachable, or high drop probability
+    let filtered = list.filter(
+      (item) =>
+        item.prediction.expectedChangePercent < -0.3 ||
+        item.prediction.optimalBuyWindow.recommendation === 'TARGET REACHABLE' ||
+        item.prediction.dropProbability >= 52
+    );
+
+    if (!filtered.length) {
+      filtered = [...list].sort((a, b) => b.prediction.dropProbability - a.prediction.dropProbability);
+    } else {
+      filtered.sort((a, b) => a.prediction.expectedChangePercent - b.prediction.expectedChangePercent);
+    }
+
+    return filtered.slice(0, 3);
+  }, [products, insights, alerts]);
 
   // Tell user when target reached
   useEffect(() => {
@@ -304,6 +331,78 @@ export default function HomePage() {
 
           {/* Visual Market Analytics Charts */}
           <DashboardCharts analytics={analytics} loading={loading} />
+
+          {/* AI Price Movement Radar Widget */}
+          {radarOpportunities.length > 0 && (
+            <section className="card radar-widget" aria-label="7-Day AI Price Movement Radar">
+              <div className="radar-head">
+                <div>
+                  <div className="row gap-xs items-center mb-xs" style={{ flexWrap: 'wrap' }}>
+                    <span className="badge badge-accent text-xs">
+                      <Icon name="sparkle" size={12} /> AI Price Movement Radar
+                    </span>
+                    <span className="badge badge-good text-xs">
+                      7-Day Forecast Horizon
+                    </span>
+                    <span className="badge badge-neutral text-xs">
+                      ARIMA-Hybrid Seasonal Engine
+                    </span>
+                  </div>
+                  <h2 className="radar-title">Predictive Price Movement Radar</h2>
+                  <p className="muted text-sm">
+                    Machine-learning price projection engine detecting upcoming retail dips, cyclical repricing, and optimal buy windows.
+                  </p>
+                </div>
+                <span className="text-xs muted radar-count-tag">
+                  {radarOpportunities.length} Forecast Opportunities
+                </span>
+              </div>
+
+              <div className="radar-cards-grid">
+                {radarOpportunities.map(({ product, prediction, badge }) => (
+                  <div key={product.id} className="radar-card">
+                    <div className="radar-card-top">
+                      <span className={`pill ${badge.tone === 'good' ? 'pill-good' : 'pill-accent'} text-xs`}>
+                        <Icon name={badge.icon} size={11} /> {badge.text}
+                      </span>
+                      <span className="badge badge-neutral text-xs">
+                        {prediction.confidenceScore}% Conf.
+                      </span>
+                    </div>
+
+                    <Link to={`/products/${product.id}`} className="radar-card-title" title={product.name}>
+                      {product.name}
+                    </Link>
+
+                    <div className="radar-card-metrics">
+                      <div>
+                        <span className="text-xs muted">Current Price</span>
+                        <div className="radar-metric-val">{formatINR(prediction.currentPrice)}</div>
+                      </div>
+                      <div>
+                        <span className="text-xs muted">Projected Low</span>
+                        <div className="radar-metric-val text-good">{formatINR(prediction.predictedLowestPrice)}</div>
+                      </div>
+                      <div>
+                        <span className="text-xs muted">Expected Window</span>
+                        <div className="radar-metric-val text-accent" style={{ fontSize: '12px' }}>{prediction.predictedLowestDayText}</div>
+                      </div>
+                    </div>
+
+                    <p className="radar-card-reason text-xs muted">
+                      {prediction.optimalBuyWindow.reason}
+                    </p>
+
+                    <div className="radar-card-foot">
+                      <Link to={`/products/${product.id}`} className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
+                        <Icon name="chart" size={13} /> View 7-Day Forecast Curve
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Compact PC Builder Command Bar */}
           <section className="card pc-builder-mini-banner" aria-label="PC Builder Feature Banner">

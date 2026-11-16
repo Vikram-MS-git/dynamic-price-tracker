@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { useApp } from '../context/AppContext';
 import { formatINR, formatPct, timeAgo } from '../lib/format';
 import { getBuySignal } from '../lib/insights';
+import { computeProductPrediction, getPredictionBadge } from '../lib/predictions';
 import Icon from './Icon';
 import Modal from './Modal';
 import PlatformBadge from './PlatformBadge';
@@ -190,6 +191,7 @@ export default function ProductList({ products, totalCount, loading, insights, i
                 <th className="num">Price</th>
                 <th className="num">Change</th>
                 <th>Trend</th>
+                <th>7D AI Forecast</th>
                 <th>Buy Signal</th>
                 <th>Updated</th>
                 <th className="actions-col"><span className="sr-only">Actions</span></th>
@@ -199,6 +201,9 @@ export default function ProductList({ products, totalCount, loading, insights, i
               {products.map((p) => {
                 const s = insights[p.id];
                 const signal = getBuySignal(p, s, alerts[p.id]);
+                const pred = computeProductPrediction(p, s?.history || [], alerts[p.id]?.target);
+                const predBadge = getPredictionBadge(pred);
+
                 return (
                   <tr key={p.id}>
                     <td>{nameCell(p)}</td>
@@ -215,6 +220,14 @@ export default function ProductList({ products, totalCount, loading, insights, i
                     </td>
                     <td className="num">{insightsLoading && !s ? <Skeleton style={{ height: 14, width: 48, marginLeft: 'auto' }} /> : <Change stats={s} />}</td>
                     <td>{insightsLoading && !s ? <Skeleton style={{ height: 22, width: 90 }} /> : <Sparkline values={s?.series} tone={sparkTone(s)} />}</td>
+                    <td>
+                      <span
+                        className={`pill ${predBadge.tone === 'good' ? 'pill-good' : predBadge.tone === 'bad' ? 'pill-bad' : 'pill'}`}
+                        title={predBadge.tooltip}
+                      >
+                        <Icon name={predBadge.icon} size={11} /> {predBadge.text}
+                      </span>
+                    </td>
                     <td>
                       <span className={`pill ${signal.tone === 'good' ? 'pill-good' : signal.tone === 'bad' ? 'pill-bad' : 'pill'}`} title={signal.advice}>
                         <Icon name="sparkle" size={11} /> {signal.shortLabel}
@@ -235,6 +248,8 @@ export default function ProductList({ products, totalCount, loading, insights, i
             const signal = getBuySignal(p, s, alerts[p.id]);
             const target = alerts[p.id]?.target;
             const reached = target != null && p.latest_price != null && Number(p.latest_price) <= target;
+            const pred = computeProductPrediction(p, s?.history || [], target);
+            const predBadge = getPredictionBadge(pred);
 
             return (
               <div key={p.id} className={`product-card ${reached ? 'card-target-reached' : ''}`}>
@@ -278,6 +293,16 @@ export default function ProductList({ products, totalCount, loading, insights, i
                     <span className="text-xs muted">14-Day Movement</span>
                     <Sparkline values={s?.series} tone={sparkTone(s)} width={120} height={26} />
                   </div>
+
+                  <div className="product-card-forecast-row">
+                    <span className="text-xs muted">7D AI Horizon</span>
+                    <span
+                      className={`pill ${predBadge.tone === 'good' ? 'pill-good' : predBadge.tone === 'bad' ? 'pill-bad' : 'pill'} text-xs`}
+                      title={predBadge.tooltip}
+                    >
+                      <Icon name={predBadge.icon} size={11} /> {predBadge.text}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="product-card-actions">
@@ -315,6 +340,9 @@ export default function ProductList({ products, totalCount, loading, insights, i
       <ul className="card-list">
         {products.map((p) => {
           const s = insights[p.id];
+          const pred = computeProductPrediction(p, s?.history || [], alerts[p.id]?.target);
+          const predBadge = getPredictionBadge(pred);
+
           return (
             <li key={p.id} className="mcard">
               {nameCell(p)}
@@ -331,6 +359,12 @@ export default function ProductList({ products, totalCount, loading, insights, i
                 <div>
                   <span className="muted">Change</span>
                   <Change stats={s} />
+                </div>
+                <div>
+                  <span className="muted">7D Forecast</span>
+                  <span className={`pill ${predBadge.tone === 'good' ? 'pill-good' : predBadge.tone === 'bad' ? 'pill-bad' : 'pill'} text-xs`} title={predBadge.tooltip}>
+                    {predBadge.shortText}
+                  </span>
                 </div>
                 <div>
                   <span className="muted">Store</span>

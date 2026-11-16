@@ -25,6 +25,7 @@ router.get('/', productController.listProducts);
 router.post('/scrape-all', scrapeAllLimiter, productController.scrapeAll);
 router.get('/:id', productController.getProduct);
 router.get('/:id/prices', productController.getProductPrices);
+router.get('/:id/prediction', productController.getProductPrediction);
 router.post('/:id/scrape', scrapeOneLimiter, productController.scrapeOne);
 router.post('/:id/simulate', productController.simulateOne);
 router.post('/:id/simulate-history', productController.simulateHistory);

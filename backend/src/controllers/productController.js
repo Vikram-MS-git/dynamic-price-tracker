@@ -1,5 +1,7 @@
 import * as productService from '../services/productService.js';
 import * as demoService from '../services/demoService.js';
+import * as predictionService from '../services/predictionService.js';
+import * as productModel from '../models/productModel.js';
 import { runScrapeJob } from '../jobs/scheduler.js';
 
 export async function createProduct(req, res, next) {
@@ -63,6 +65,29 @@ export async function getProductPrices(req, res, next) {
     });
     if (!result) return res.status(404).json({ error: 'Product not found' });
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getProductPrediction(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id < 1) {
+      return res.status(400).json({ error: 'Invalid product id' });
+    }
+    const product = await productService.getProduct(req.user.id, id);
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    const prices = await productModel.getPriceHistory(id);
+    const horizon = req.query.horizon ? Math.min(30, Math.max(3, Number(req.query.horizon))) : 7;
+    const prediction = predictionService.predictProductPrices(
+      product,
+      prices,
+      product.alert_target_price,
+      horizon
+    );
+    res.json(prediction);
   } catch (err) {
     next(err);
   }

@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { formatDateTime, formatINR, formatPct } from '../lib/format';
+import { computeProductPrediction } from '../lib/predictions';
 import Icon from '../components/Icon';
 import PlatformBadge from '../components/PlatformBadge';
 import DataSourceBadge from '../components/DataSourceBadge';
@@ -138,6 +139,7 @@ export default function ProductDetailPage() {
   const [activeRange, setActiveRange] = useState('all');
   const [latestPrice, setLatestPrice] = useState(null);
   const [realtimeActive, setRealtimeActive] = useState(false);
+  const [showForecast, setShowForecast] = useState(true);
 
   const loadPrices = async (rangeFrom = from, rangeTo = to) => {
     setLoading(true);
@@ -284,7 +286,12 @@ export default function ProductDetailPage() {
   }
   if (!product) return <EmptyState icon="search" title="Product not found" />;
 
-  const target = alerts[product.id]?.target;
+  const target = alerts[product?.id]?.target;
+
+  const prediction = useMemo(() => {
+    if (!product) return null;
+    return computeProductPrediction(product, prices, target, 7);
+  }, [product, prices, target]);
 
   return (
     <>
@@ -380,15 +387,40 @@ export default function ProductDetailPage() {
         <div className="card">
           <div className="card-head">
             <div>
-              <h2>Price history</h2>
-              <p className="muted">Hover the chart to inspect individual readings.</p>
+              <div className="row gap-xs items-center mb-xs">
+                <h2>Price history & AI Projection</h2>
+                <span className="badge badge-accent text-xs">
+                  <Icon name="sparkle" size={11} /> 7-Day Forecasting
+                </span>
+              </div>
+              <p className="muted">Store price readings with predictive trajectory modeling</p>
             </div>
-            <div className="segmented" role="group" aria-label="Date range">
-              {[['7', 'Last 7 days', 7], ['30', 'Last 30 days', 30], ['all', 'All time', null]].map(([key, label, days]) => (
-                <button key={key} type="button" aria-pressed={activeRange === key} className={activeRange === key ? 'active' : ''} onClick={() => applyQuickRange(days)}>
-                  {label}
+            <div className="row gap-xs items-center" style={{ flexWrap: 'wrap' }}>
+              <div className="segmented" role="group" aria-label="Forecast View Mode">
+                <button
+                  type="button"
+                  aria-pressed={!showForecast}
+                  className={!showForecast ? 'active' : ''}
+                  onClick={() => setShowForecast(false)}
+                >
+                  History
                 </button>
-              ))}
+                <button
+                  type="button"
+                  aria-pressed={showForecast}
+                  className={showForecast ? 'active' : ''}
+                  onClick={() => setShowForecast(true)}
+                >
+                  <Icon name="sparkle" size={12} /> 7D Forecast
+                </button>
+              </div>
+              <div className="segmented" role="group" aria-label="Date range">
+                {[['7', '7d', 7], ['30', '30d', 30], ['all', 'All', null]].map(([key, label, days]) => (
+                  <button key={key} type="button" aria-pressed={activeRange === key} className={activeRange === key ? 'active' : ''} onClick={() => applyQuickRange(days)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -407,11 +439,148 @@ export default function ProductDetailPage() {
           </div>
 
           {error && <ErrorState message={error} onRetry={() => loadPrices()} />}
-          {loading ? <Skeleton style={{ height: 300 }} /> : <PriceChart prices={prices} target={target} />}
+          {loading ? (
+            <Skeleton style={{ height: 300 }} />
+          ) : (
+            <PriceChart
+              prices={prices}
+              target={target}
+              forecast={prediction?.forecast}
+              showForecast={showForecast}
+            />
+          )}
         </div>
 
         <AlertCard product={product} latest={latestPrice} onAlertTriggered={() => { loadPrices(); refreshData(); }} />
       </div>
+
+      {/* 7-Day Forward Price Forecast & Analytics Section */}
+      {prediction && (
+        <section className="card prediction-card" aria-label="AI Forward Price Forecast">
+          <div className="prediction-head">
+            <div className="prediction-title-group">
+              <div className="row gap-xs items-center mb-xs" style={{ flexWrap: 'wrap' }}>
+                <span className="badge badge-accent text-xs">
+                  <Icon name="sparkle" size={12} /> AI Predictive Forecasting Engine
+                </span>
+                <span className="badge badge-neutral text-xs">
+                  Model: ARIMA-Hybrid Seasonal Projection
+                </span>
+                <span className="badge badge-good text-xs">
+                  95% Confidence Corridor
+                </span>
+              </div>
+              <h2>7-Day Forward Price Forecast & Analytics</h2>
+              <p className="muted text-sm">
+                Algorithmic price forecasting incorporating weekly retail repricing cycles, market momentum drift, and historical volatility corridors.
+              </p>
+            </div>
+
+            <div className="prediction-head-badge">
+              <span className={`pill ${prediction.optimalBuyWindow.actionTone === 'good' ? 'pill-good' : prediction.optimalBuyWindow.actionTone === 'accent' ? 'pill-accent' : 'pill'}`}>
+                <Icon name="sparkle" size={12} /> {prediction.optimalBuyWindow.recommendation}
+              </span>
+            </div>
+          </div>
+
+          {/* Prediction KPI Cards */}
+          <div className="prediction-kpi-grid">
+            <div className="pred-kpi">
+              <span className="pred-kpi-label">Projected 7D Low</span>
+              <div className="pred-kpi-val text-good">
+                {formatINR(prediction.predictedLowestPrice)}
+              </div>
+              <div className="pred-kpi-sub">
+                Expected around {prediction.predictedLowestDayText}
+              </div>
+            </div>
+
+            <div className="pred-kpi">
+              <span className="pred-kpi-label">Drop Probability</span>
+              <div className="pred-kpi-val" style={{ color: prediction.dropProbability >= 65 ? 'var(--good)' : 'var(--text-1)' }}>
+                {prediction.dropProbability}%
+              </div>
+              <div className="pred-kpi-sub">
+                {prediction.dropProbability >= 65 ? 'High probability of upcoming dip' : 'Moderate price stability'}
+              </div>
+            </div>
+
+            <div className="pred-kpi">
+              <span className="pred-kpi-label">Optimal Buy Window</span>
+              <div className="pred-kpi-val text-accent">
+                {prediction.optimalBuyWindow.window}
+              </div>
+              <div className="pred-kpi-sub">
+                {prediction.optimalBuyWindow.recommendation}
+              </div>
+            </div>
+
+            <div className="pred-kpi">
+              <span className="pred-kpi-label">Expected Net Shift</span>
+              <div className={`pred-kpi-val ${prediction.expectedChange < 0 ? 'text-good' : prediction.expectedChange > 0 ? 'text-bad' : ''}`}>
+                {prediction.expectedChange < 0 ? `-${formatINR(Math.abs(prediction.expectedChange))}` : prediction.expectedChange > 0 ? `+${formatINR(prediction.expectedChange)}` : '₹0'}
+              </div>
+              <div className="pred-kpi-sub">
+                {formatPct(prediction.expectedChangePercent)} 7-day variance
+              </div>
+            </div>
+          </div>
+
+          {/* AI Buying Advice Box */}
+          <div className={`prediction-advice-box tone-${prediction.optimalBuyWindow.actionTone}`}>
+            <div className="advice-icon-wrap">
+              <Icon name="sparkle" size={20} />
+            </div>
+            <div className="advice-text-wrap">
+              <div className="row gap-xs items-center mb-xs" style={{ flexWrap: 'wrap' }}>
+                <strong>AI Market Intelligence & Recommendation:</strong>
+                <span className="badge badge-accent text-xs">{prediction.optimalBuyWindow.recommendation}</span>
+                {prediction.optimalBuyWindow.estimatedSavings > 0 && (
+                  <span className="badge badge-good text-xs">
+                    Projected Savings: {formatINR(prediction.optimalBuyWindow.estimatedSavings)}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm">
+                {prediction.optimalBuyWindow.reason}
+              </p>
+            </div>
+          </div>
+
+          {/* Day-by-Day Forecast Timeline */}
+          <div className="forecast-timeline-wrap">
+            <div className="forecast-timeline-head">
+              <h3 className="text-sm">7-Day Projected Horizon Breakdown</h3>
+              <span className="text-xs muted">Daily price estimates with standard error bounds</span>
+            </div>
+
+            <div className="forecast-timeline-grid">
+              {prediction.forecast.map((item) => (
+                <div key={item.day} className={`forecast-day-card ${item.targetReached ? 'target-hit' : ''}`}>
+                  <div className="forecast-day-top">
+                    <span className="forecast-day-name">{item.displayDate.split(',')[0]}</span>
+                    <span className="forecast-day-date">{item.shortDate}</span>
+                  </div>
+                  <div className="forecast-day-price">
+                    {formatINR(item.predictedPrice)}
+                  </div>
+                  <div className="forecast-day-corridor">
+                    <span className="text-xs muted">{formatINR(item.lowerBound, { compact: true })} – {formatINR(item.upperBound, { compact: true })}</span>
+                  </div>
+                  <div className="forecast-day-conf">
+                    <span className="badge badge-neutral text-xs">{item.confidence}% Conf.</span>
+                  </div>
+                  {item.targetReached && (
+                    <div className="forecast-target-tag">
+                      🎯 Hits Target!
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {history.length > 0 && (
         <section className="card table-card">

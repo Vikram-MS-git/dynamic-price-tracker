@@ -68,6 +68,7 @@ export const api = {
     const qs = new URLSearchParams(params).toString();
     return request(`/products/${id}/prices${qs ? `?${qs}` : ''}`);
   },
+  getProductPrediction: (id, horizon = 7) => request(`/products/${id}/prediction?horizon=${horizon}`),
   scrapeAll: () => request('/products/scrape-all', { method: 'POST' }),
   scrapeProduct: (id) => request(`/products/${id}/scrape`, { method: 'POST' }),
   deleteProduct: (id) => request(`/products/${id}`, { method: 'DELETE' }),

@@ -2167,5 +2167,407 @@ a.brand { color: inherit; }
   }
 }
 
+/* ============================================================
+   AI Price Forecasting & Predictive Horizon System
+   ============================================================ */
+
+/* Chart Container & Legend */
+.chart-container-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.forecast-legend-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 8px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.forecast-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-dot.legend-recorded {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.legend-dash.legend-projected {
+  width: 18px;
+  height: 3px;
+  border-top: 2.5px dashed #10b981;
+}
+
+.legend-band {
+  width: 16px;
+  height: 10px;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 2px;
+}
+
+/* 7-Day Prediction Main Card */
+.prediction-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  position: relative;
+  overflow: hidden;
+}
+
+.prediction-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent) 0%, #10b981 100%);
+}
+
+.prediction-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.prediction-title-group h2 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+
+/* Prediction KPI Grid */
+.prediction-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.pred-kpi {
+  padding: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.pred-kpi:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.pred-kpi-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.pred-kpi-val {
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.pred-kpi-sub {
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+/* Prediction Advice Box */
+.prediction-advice-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.prediction-advice-box.tone-good {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, var(--surface-2) 100%);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.prediction-advice-box.tone-good .advice-icon-wrap {
+  color: #10b981;
+}
+
+.prediction-advice-box.tone-accent {
+  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--surface-2) 100%);
+  border-color: var(--accent);
+}
+
+.prediction-advice-box.tone-accent .advice-icon-wrap {
+  color: var(--accent);
+}
+
+.prediction-advice-box.tone-neutral {
+  border-color: var(--border-strong);
+}
+
+.advice-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.advice-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Forecast Timeline Breakdown */
+.forecast-timeline-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.forecast-timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.forecast-timeline-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+}
+
+.forecast-day-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 12px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.forecast-day-card:hover {
+  border-color: #10b981;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.forecast-day-card.target-hit {
+  border-color: #10b981;
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.12) 0%, var(--surface-2) 100%);
+}
+
+.forecast-day-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.forecast-day-name {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.forecast-day-date {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.forecast-day-price {
+  font-size: 15px;
+  font-weight: 700;
+  color: #10b981;
+  letter-spacing: -0.01em;
+}
+
+.forecast-day-corridor {
+  font-size: 10px;
+}
+
+.forecast-day-conf {
+  margin-top: 2px;
+}
+
+.forecast-target-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #10b981;
+  margin-top: 2px;
+}
+
+/* Product Card Forecast Row (Grid View) */
+.product-card-forecast-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+/* AI Price Movement Radar Widget (Dashboard) */
+.radar-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  position: relative;
+}
+
+.radar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.radar-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 2px;
+}
+
+.radar-count-tag {
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.radar-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.radar-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  transition: all 0.15s ease;
+}
+
+.radar-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.radar-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.radar-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 38px;
+}
+
+.radar-card-title:hover {
+  color: var(--accent);
+}
+
+.radar-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.radar-metric-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 2px;
+}
+
+.radar-card-reason {
+  min-height: 34px;
+  line-height: 1.4;
+}
+
+.radar-card-foot {
+  margin-top: auto;
+}
+
+@media (max-width: 1024px) {
+  .prediction-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .forecast-timeline-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .radar-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .prediction-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+  .forecast-timeline-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 
 
