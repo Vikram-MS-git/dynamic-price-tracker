@@ -1,0 +1,187 @@
+================================================================================
+DYNAMIC PRICE TRACKER - OVERALL PROJECT WORKING SUMMARY
+================================================================================
+Project Title: Dynamic Price Tracker for Indian E-Commerce Platforms
+Target Retailers: Amazon India (amazon.in) and Flipkart (flipkart.com)
+Core Research Question (RQ1): How do price fluctuations for selected products
+vary across different Indian e-commerce platforms over time?
+Architecture: 3-Tier Web Application (React SPA + Express REST API + PostgreSQL)
+Author / Student: Vikram (github.com/Vikram-MS-git/dynamic-price-tracker)
+================================================================================
+
+1. PROJECT OVERVIEW & PURPOSE
+--------------------------------------------------------------------------------
+The Dynamic Price Tracker is a full-stack, automated web application designed to
+solve the problem of price volatility and fragmented price discovery across
+competing Indian e-commerce platforms. 
+
+Although Amazon India and Flipkart frequently sell identical products, their
+prices constantly diverge due to dynamic pricing algorithms, lightning deals,
+seasonal festive sales (e.g., Great Indian Festival, Big Billion Days), and
+seller competition.
+
+Manual price monitoring across multiple websites is time-consuming, tedious,
+and prone to human error. The Dynamic Price Tracker automates continuous price
+collection, stores time-series historical records in a relational database,
+groups equivalent listings together, and calculates mathematical volatility
+metrics to directly answer the research question (RQ1).
+
+
+2. SYSTEM ARCHITECTURE & TECHNOLOGY STACK
+--------------------------------------------------------------------------------
+The application is built using a clean 3-Tier modular architecture:
+
+A. Presentation Tier (Frontend):
+   - React 18: Component-driven Single-Page Application (SPA)
+   - Vite: Fast production bundler and local development environment
+   - Recharts: Responsive SVG data visualization library for interactive charts
+   - React Router v6: Client-side routing and protected navigation guards
+   - Tailwind / Modern CSS: Clean layout, responsive cards, and dark/light themes
+   - Context API: Global authentication, toast notifications, and theme state
+
+B. Application Tier (Backend Services):
+   - Node.js 18+ & Express.js: RESTful API server handling business logic
+   - node-cron: Background daemon running scheduled scraping jobs every 6 hours
+   - Axios & Cheerio: High-speed static HTML extraction & JSON-LD parser
+   - Puppeteer: Headless Chromium browser for JavaScript-rendered SPA pages
+   - JSON Web Tokens (JWT) & bcryptjs: User authentication and password hashing
+   - Security Middlewares: Helmet (HTTP security headers), CORS, express-rate-limit
+
+C. Data Persistence Tier (Database):
+   - PostgreSQL 16 (Local or Neon Serverless Cloud Database)
+   - Connection Pooling via 'pg' with SSL encrypted connections
+   - Relational schema with foreign keys and cascade delete support
+   - Idempotent database migrations trackable via schema_migrations
+
+
+3. CORE MODULES & HOW THEY WORK
+--------------------------------------------------------------------------------
+
+MODULE 1: AUTHENTICATION & MULTI-TENANT ISOLATION
+- Users register and log in using email and password.
+- Passwords are encrypted with bcrypt salt hashing.
+- API requests authenticate via Bearer JWT tokens.
+- Every user has isolated private data: products, groups, price histories,
+  and alert configurations belong strictly to the authenticated user.
+
+MODULE 2: PRODUCT MANAGEMENT & URL SANITIZATION
+- Users add product listings by submitting the product URL and platform.
+- Security & SSRF Protection: The backend validates URLs, accepting only valid
+  https:// product links from Amazon (amazon.in, amzn.to, a.co) and Flipkart
+  (flipkart.com, fkrt.it). Private IP addresses, localhost, and internal
+  network paths are strictly blocked on initial input and on every redirect.
+- Link Normalization: Tracking tags, affiliate query parameters, and session
+  IDs are stripped, ensuring unique, canonical product references.
+
+MODULE 3: LOGICAL PRODUCT GROUPING (CRITICAL FOR RQ1)
+- Identical or equivalent items from Amazon and Flipkart are assigned to the
+  same "Product Group" (e.g., "Sony WH-1000XM5 Headphones").
+- This grouping enables the system to join independent time-series datasets
+  and plot them on the same comparative timeline.
+
+MODULE 4: DUAL-STRATEGY SCRAPING SUBSYSTEM
+Scraping modern e-commerce sites requires resilience against dynamic layouts:
+- Path A (Fast Static Parser - Axios + Cheerio):
+  Sends an HTTP GET request with realistic browser headers and desktop
+  User-Agents. Cheerio extracts prices using CSS selectors and JSON-LD
+  (schema.org/Product) structured metadata.
+- Amazon Strike-Through MRP Filter:
+  Crucial fix: Explicitly ignores crossed-out MRP nodes (e.g., .a-text-price)
+  so that the true selling price is captured rather than the original list price.
+- Path B (Headless Browser Fallback - Puppeteer):
+  If the static parser returns null or is blocked by client-side hydration,
+  the backend triggers Puppeteer. It launches headless Chrome, executes client
+  JavaScript, waits for price DOM elements to hydrate, and reads the price.
+- Normalization:
+  Currency symbols (₹, INR), commas, and whitespace are stripped using regex,
+  and values are validated and stored as DECIMAL(12,2).
+- Error Visibility:
+  If scraping fails on both paths, the error reason is stored in the
+  'last_scrape_error' field of the product table, displaying a clear alert badge
+  in the user interface without corrupting existing historical data.
+
+MODULE 5: AUTOMATED BACKGROUND SCHEDULER
+- Managed by 'node-cron', scheduled by default to run every 6 hours (0 */6 * * *).
+- Polite Sequential Execution: Scrapes products one-by-one with a configurable
+  delay (SCRAPE_DELAY_MS = 1500ms) to respect server resources and prevent
+  IP rate-limiting or anti-bot blocks.
+- Manual On-Demand Refresh: Users can click "Refresh All Prices" or refresh a
+  single product anytime from the UI.
+
+MODULE 6: TIME-SERIES STORAGE & DATABASE DESIGN
+The relational schema comprises three primary tables:
+1. product_groups: id (PK), user_id (FK), name (Group Label, e.g., "iPhone 15")
+2. products: id (PK), user_id (FK), name, url, platform (amazon/flipkart),
+   category, group_id (FK -> product_groups.id), image_url, last_scraped_at,
+   last_scrape_error
+3. price_history: id (PK), product_id (FK -> products.id ON DELETE CASCADE),
+   price (DECIMAL 12,2), currency (INR), scraped_at (TIMESTAMP)
+* Cardinality: One Group has many Products (1:N); One Product has many
+  Price Observations over time (1:N).
+
+MODULE 7: CROSS-PLATFORM COMPARISON & STATISTICAL ENGINE (RQ1)
+When the user selects a product group on the Compare page, the endpoint
+GET /groups/:id/compare computes per-platform descriptive statistics:
+- Minimum Price (Min): Lowest price recorded during the period
+- Maximum Price (Max): Peak price observed
+- Arithmetic Mean (μ): Average selling price over time
+- Standard Deviation (σ): Measure of price dispersion / volatility
+  (A higher standard deviation indicates more frequent or steeper price swings)
+- Percentage Change (Δ%): ((Last Price - First Price) / First Price) * 100
+  (Measures net price direction over the monitoring window)
+
+
+4. STEP-BY-STEP END-TO-END SYSTEM WORKFLOW
+--------------------------------------------------------------------------------
+1. Registration & Login:
+   User creates an account or logs in to receive a secure JWT session token.
+
+2. Adding Products:
+   User pastes an Amazon URL and assigns group name "Sony WH-1000XM5".
+   User pastes the matching Flipkart URL under the same group name.
+
+3. Initial Data Collection:
+   The backend validates URLs, scrubs query parameters, and immediately triggers
+   an initial scrape, saving the first price points and product images.
+
+4. Continuous Automated Tracking:
+   Every 6 hours, the node-cron scheduler wakes up, queries all active products,
+   fetches the latest selling prices via Cheerio (or Puppeteer fallback), and
+   appends timestamped rows to the 'price_history' table.
+
+5. Visual Analytics (Dashboard & Product Detail):
+   The user opens the Home Dashboard to see live cards with current prices,
+   platform badges, and status. Clicking any product opens an interactive Recharts
+   line chart showing price progression over days or weeks.
+
+6. Cross-Platform Analysis (Compare Page for RQ1):
+   User navigates to "Compare (RQ1)" and selects a product group.
+   The system displays:
+   - A synchronized dual-line graph: Amazon (Orange curve) vs Flipkart (Blue curve)
+   - A side-by-side volatility table: Instant comparison of Min, Max, Average,
+     Standard Deviation (σ), and Net % Change between the two platforms.
+
+
+5. RESILIENCE, SEEDING & VIVA READINESS
+--------------------------------------------------------------------------------
+- Real-World Scraping Backup:
+  Because commercial retail websites frequently modify class names or challenge
+  datacenter IPs during viva demonstrations, the project includes built-in
+  idempotent seed scripts:
+  * 'npm run seed:rq1 -- user@example.com': Creates 3 pre-configured product
+    groups across Amazon and Flipkart with realistic 14-day price histories.
+  * 'npm run seed:demo': Fills missing time-series history for existing items.
+- Ethical & Legal Transparency:
+  The project report explicitly documents Terms of Service boundaries, rate
+  limiting considerations, robots.txt awareness, and the educational scope
+  of the research.
+
+
+6. SUMMARY CONCLUSION
+--------------------------------------------------------------------------------
+The Dynamic Price Tracker successfully fulfills all requirements of the Major
+Project guidelines. By uniting an automated scraping pipeline, a resilient
+relational time-series database, and a responsive React comparison dashboard,
+the system delivers a complete, reproducible academic and practical solution
+that comprehensively answers Research Question 1 (RQ1).
+================================================================================
